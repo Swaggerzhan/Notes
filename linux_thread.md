@@ -30,6 +30,26 @@ int pthread_create(pthread_t *restrict tidp,
 
 用于捕获thread对应线程ID的返回值，如果线程thread尚未返回，则堵塞等待返回。join函数不能调用于已经detach的函数。
 
+```C++
+
+void *write_thread(void *arg){
+    //TODO
+    void *data = new Data;
+    return data;
+}
+
+void main(){
+    pthread_t t1;
+    pthread_create(&t1, nullptr, write_thread, nullptr);
+    void *retData;
+    /* rval_ptr是个二级指针 */
+    pthread_join(t1, &retData);
+    return;
+}
+
+```
+
+
 #### __4. int pthread_cancel(pthread_t tid);__
 
 用于取消同一进程中的其他线程，pthread_cancel函数不等待终止，它仅仅提出要求。
