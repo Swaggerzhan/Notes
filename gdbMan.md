@@ -44,3 +44,6 @@
     
 * print 打印
     缩写为p，使用 `p 变量`打印变量值 或者 `p &变量`打印变量地址。
+    
+* set follow-fork-mode [parent|child] 设置跟踪模式
+    提前设置跟踪模式可以调试父进程或者子进程
