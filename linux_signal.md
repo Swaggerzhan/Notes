@@ -74,11 +74,41 @@ int sigaction(int signo, const struct sigaction *restrict act,
 /* sigaction结构体 */
 struct sigaction{
     void (*sa_handler)(int); /* 信号处理的函数 */
-    sigset_t        sa_mask;
-    int             sa_flags;
+    sigset_t        sa_mask; /* 调用信号处理函数时需要堵塞的信号 */
+    int             sa_flags;/* 信号进程处理选项 */
     void            (*sa_sigaction)(int, siginfo_t *, void *);
 };
 ```
+sa_mask使得调用信号处理函数时候屏蔽其中的信号， __保证在处理一个给定的信号时，这种信号如果再次发生，那么它会被堵塞到对前一个信号的处理结束为止。__ 如果某个信号被阻塞时，它发生了5次， __那么对这种信号解除阻塞后，其信号处理函数通常只会被调用一次。__
+
+sa_flags比较常用的一个字段是 __SA_RESTART__ ，`表示由此信号中断的系统调用自动重新启动。`
+
+* 信号集 
+
+这种数据类型告诉内核不允许发生信号集中的信号。
+```C++
+#include <signal.h>
+
+int sigemptyset(sigset_t *set);
+int sigfillset(sigset_t* set);
+int sigaddset(sigset_t *set, int signo);
+int sigdelset(sigset_t *set, int signo);
+/* 以上4个函数成功返回0，出错返回-1 */
+
+int sigismember(const sigset_t *set, int signo); // 真返回1，假返回1
+```
+
+信号集初始化的时候必须调用`sigemptyset()`或者`sigfillset()`，一个将其信号集清空，一个将信号集包含所有信号，之后就可以使用信号增减函数对信号集进程加减操作。
+```C++
+int sigprocmask(int how, const sigset_t *set, sigset_t *oset);
+                //成功返回0,出错返回-1
+/* how字段 */
+// SIG_BLOCK set指向的集合加入屏蔽信号集合
+// SIG_UNBLOCK set指向的集合解除屏蔽
+// SIG_SETMASK set指向的集合覆盖当前指向的屏蔽集合
+```
+
+
 
 ### 关于信号量的实现
 

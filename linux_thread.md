@@ -75,6 +75,39 @@ cleanup函数系列使用的是栈来记录类型，所以push进的函数调用
     *  __响应取消请求时__
     * 使用 __非零execute参数__ 调用pthread_cleanup_pop时候
 
+### __7. 线程同步__
+
+* 互斥锁
+
+```C++
+int pthread_mutex_init(pthread_mutex_t* mutex, const pthread_mutexattr_t attr);
+// attr为锁的属性值，默认可设为nullptr
+/* 线程初始化也可以直接赋值 PTHREAD_MUTEX_INITIALIZER */
+int pthread_mutex_destory(pthread_mutex_t *mutex);
+
+int pthread_mutex_lock(pthread_mutex_t *mutex);/* 堵塞上锁 */
+int pthread_mutex_trylock(pthread_mutex_t *mutex);/* 非堵塞上锁 */
+int pthread_mutex_unlock(pthread_mutex_t *mutex);/* 解锁 */
+
+int pthread_mutex_timelock(pthread_mutex_t *mutex, const struct timespec tsptr);
+/* 在时间内尝试上锁，超时返回 */
+//成功返回 0，失败返回错误编号
+```
+* 条件变量
+
+```C++
+#include <pthread.h>
+
+
+int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr);
+/* 或者赋值PTHREAD_COND_INITIALIZER初始化 */
+int pthread_cond_destroy(pthread_cond_t *cond);
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_timewait(pthread_cond_t *cond, pthread_mutex_t *mtext, const struct timespec tsptr);
+```
+
+条件变量可以配合互斥量进行协同配合。
+
 
 
 
