@@ -104,9 +104,47 @@ int pthread_cond_init(pthread_cond_t *cond, const pthread_condattr_t *attr);
 int pthread_cond_destroy(pthread_cond_t *cond);
 int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
 int pthread_cond_timewait(pthread_cond_t *cond, pthread_mutex_t *mtext, const struct timespec tsptr);
+
+int pthread_cond_signal(pthread_cond_t *cond);
 ```
 
 条件变量可以配合互斥量进行协同配合。
+
+```C++
+pthread_cond_t q_ready = PTHREAD_COND_INITIALIZE; /* 工作队列状态 */
+pthread_mutex_t lock = PHTREAD_MUTEX_INITIALIZE;
+
+std::queue<Work*> q; /* 工作队列，其中是需要处理的 */
+
+/* thread_1 */
+
+pthread_mutex_lock(&lock);
+/* 如果此时队列是空的，pthread_cond_wait使得线程1进入挂起状态 */
+/* 并且期间互斥量lock解锁，期间如果收到q_ready改变信号，将重新上锁，并且返回继续执行 */
+if (q.empty())
+    pthread_cond_wait(&q_ready, &lock);
+/* 取出队列并且处理 */    
+Work* work = q->front();
+q->pop();
+work->process();
+pthread_mutex_unlock(&lock);
+
+
+/* thread_2 */
+
+pthread_mutex_lock(&lock);
+q.push(new_work);/* 往队列中加入新工作 */
+pthread_mutex_unlock(&lock);
+/* 新工作加入队列，通过q_ready叫醒为其等待的线程继续工作 */
+pthread_cond_signal(&q_ready);
+
+```
+
+* 自旋锁
+    这种锁和互斥锁类似，不同的是互斥锁会进入休眠状态，而自旋锁会处于`空等状态`，适用于内核类似中又或者`短时间持有`以及线程`不希望在重新调度上花费太多成本`，用户态下作用并没有互斥锁来得有效。
+    
+* 屏障
+    TODO
 
 
 
