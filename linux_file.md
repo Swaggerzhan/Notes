@@ -68,6 +68,51 @@ __dup和dup2函数是干什么的用一张图片就可以清楚解释：__
 
 dup函数返回一个新文件描述符，是当前文件描述符中最小值。对于dup2，可以使用fd2参数来指定新的描述符的值，如果fd2已经打开，就先关闭fd2。如果fd2等于fd，则直接返回fd2。
 
+### 8.readv和writev函数
+
+readv和writev即散布读和散布写，可以在一次调用读写多个缓冲区。使用这种方案比多次调用read或者write函数效率要高，毕竟谁也不想调用相同的系统调用多次，徒增切换花销。
+```C++
+#include <sys/uio.h>
+
+ssize_t readv(int fd, const iovec *iov, int iovcnt);
+ssize_t writev(int fd, const iovec* iov, int iovcnt);
+// iov是一个指向iovec结构体的数组，iovcnt表示数组个数
+
+struct iovec{
+    void *iov_base; /* 起始地址 */
+    size_t iov_len;/* 长度 */
+};
+```
+
+### 9. 储存映射IO函数mmap
+
+储存映射能将磁盘上的一个文件直接映射到内存中的一个缓冲区上，当从缓存区中读写信息就等同于在文件中读写信息，即在不实用read和write的情况下执行IO操作。
+```C++
+#include <sys/mman.h>
+/* 返回值为映射区指向的地址 */
+void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
+/* 改变映射区的权限 */
+int mprotect(void *addr, size_t len, int prot);
+/* 关闭映射区 */
+int munmap(void* addr, size_t len);
+```
+addr参数指向一个地址，表示将磁盘数据映射到这个地址上，建议设置为0，由操作系统接管。
+prot表示映射地区的保护要求，可按位打开
+```C++
+PROT_READ // 映射区可读
+PROT_WRITE // 映射区可写
+PROT_EXEC // 映射区可执行
+PROT_NONE // 映射区不可访问
+```
+flag字段可以用来设置映射区的属性等
+```C++
+MAP_FIXED // 必返回指定的addr地址，不建议
+MAP_SHARED // 对于映射区的操作等同于对文件的操作
+MAP_PRIVATE // 对于缓存的操作不改变文件本身 调试可用
+```
+fd为指向的文件，off表示文件偏移量
+最后，fork的子进程是可以继承映射区的，但是exec后就不共享了。
+
 
 
 ## 二、文件共享
