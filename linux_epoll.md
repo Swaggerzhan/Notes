@@ -12,22 +12,22 @@
 
 事件参数具体解析：
 
-* ###__EPOLLIN__ 
+* ### __EPOLLIN__ 
 
     文件描述符可读
-* ###__EPOLLOUT__
+* ### __EPOLLOUT__
 
     文件描述符可写
     
 
-* ###__EPOLLHUP__
+* ### __EPOLLHUP__
 
 
-* ###__EPOLLRDHUP__
+* ### __EPOLLRDHUP__
 
     在对端关闭时会被触发，这个事件应该优先处理
     
-* ###__EPOLLONESHOT__
+* ### __EPOLLONESHOT__
 
     只监听一次事件。
     
