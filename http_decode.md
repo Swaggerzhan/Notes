@@ -305,6 +305,7 @@ int main() {
 ```
 
 HTTP的返回头例如：
+```
 HTTP/1.1 200 OK
 Transfer-Encoding: chunked
 Connection: keep-alive
@@ -316,5 +317,6 @@ Keep-Alive: timeout=4
 Last-Modified: Wed, 14 Apr 2021 07:30:35 GMT
 Proxy-Connection: keep-alive
 Server: nginx/1.10.3 (Ubuntu)
+```
 
 引用：Linux高性能服务器编程(游双)
