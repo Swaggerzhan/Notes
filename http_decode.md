@@ -304,4 +304,17 @@ int main() {
 }
 ```
 
+HTTP的返回头例如：
+HTTP/1.1 200 OK
+Transfer-Encoding: chunked
+Connection: keep-alive
+Content-Encoding: gzip
+Content-Type: text/html
+Date: Sat, 17 Apr 2021 11:36:52 GMT
+Etag: W/"60769a1b-264"
+Keep-Alive: timeout=4
+Last-Modified: Wed, 14 Apr 2021 07:30:35 GMT
+Proxy-Connection: keep-alive
+Server: nginx/1.10.3 (Ubuntu)
+
 引用：Linux高性能服务器编程(游双)
