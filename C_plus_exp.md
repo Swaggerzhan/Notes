@@ -252,4 +252,125 @@ Test* const t = new Test(20);
 
 ```
 
+### 5. friend关键字
+
+友元函数以及友元类
+C++中类存在许多的属性如public，protected，private。
+public: 类中所有方法，子类所有方法，类外方法都可以访问。
+protected: 类中所有方法，子类所有方法都可以访问，类外不可访问。
+private: 类中所有方法可以访问，子类和类外不可访问。
+
+friend关键字的用处在于，当一个类中有许多封装好的private属性，但有不得已需要开放一些访问的途径，即可以将一个函数设置为`friend (友好的函数)`，那么函数中即可访问此类所有的属性。
+
+```C++
+class Student{
+
+private:
+    int money;
+    
+public:
+    Student(int m): money(m){}
+
+    ~Student(){}
+    
+    friend void cat_money(Student &stu); // 声明了一个友元函数
+};
+
+void cat_money(Student &stu){
+    cout << stu->money << endl; // 访问了其私有属性
+}
+```
+
+以上方法就可定义一个友元函数，除此之外，还能定义一个友元类，当一个类被定义为友元类，那么类中的所有方法都能访问到其私有属性等。
+
+```C++
+class Parent;
+
+class Student{
+private:
+    int money;
+    
+public:
+    Student(int m): money(m){}
+    ~Student(){}
+    
+    friend class Parent; // 将parentl类设置为友元类
+};
+
+class Parent{
+public:
+    Parent(){}
+    ~Parent(){}
+    
+    cat_money(Student &stu){
+        cout << stu->money << endl; // 访问student中的私有属性。
+    }
+};
+```
+
+__友元类和友元函数不可继承和传递，__ 如有一个类`A`，它将类`B`设置为 __友元类__ ，类`B`又有一个子类`C`，那么`C`无法访问`A`中的私有属性。且派生类也不会收到其影响，还是以上的例子，现在类`A`有一个子类`D`， __那么类`B`是无法访问到`D`中的私有属性的。__ 
+ 一般不建议这样做，将一个类设置为友元类将暴露太多封装的细节。
+ 
+### 6. class类中的一些需要记住的知识
+
+```C++
+class A;
+class B: public A;
+class C: public C;
+```
+那么以上的构造函数是从`A()`开始，到`C()`，析构函数是`~C()`开始直到`~A()`。
+类的继承还涉及到public继承，protected继承，private继承等。
+
+```C++
+基类中成员   继承方式       派生类中的成员
+public       public         public
+protected    public         protected
+private      public        无权访问
+
+
+基类中成员    继承方式       派生类中的成员
+public       protected      protected
+protected    protected      protected
+private      protected      无权访问
+
+基类中成员    继承方式       派生类中的成员
+public       private        private
+protected    private        private
+private      private        无权访问
+```
+
+### 7. operator关键字
+
+operator关键字可以将某些操作符号进行重载，比如说`==`
+
+```C++
+class Student{
+public:
+    int age;
+    bool operator==(const Student &stu){
+        return this->age == stu->age;
+    }
+};
+
+int main(){
+    Student t1;
+    t1.age = 20;
+    Sutdent t2;
+    t2.age = 22;
+    if (t1 == t2)
+        cout << "yes" << endl;
+    else
+        cout << "no" << endl;
+}
+//输出NO
+```
+
+即将右边的t2当作函数operator的参数传入。
+
+
+ 
+
+
+
+
 
