@@ -47,3 +47,6 @@
     
 * set follow-fork-mode [parent|child] 设置跟踪模式
     提前设置跟踪模式可以调试父进程或者子进程
+    
+* set disassembly-flavor intel 
+* set disassembly-flavor att

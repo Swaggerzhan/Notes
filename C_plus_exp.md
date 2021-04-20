@@ -120,6 +120,8 @@ const &c_ref = 10; // const左值引用可以指向右值，正确
 
 ### 4. const关键字
 
+#### 面向过程使用时:
+
 ```C++
 /* 这两者本质没啥区别 */
 int const x = 10;
@@ -142,20 +144,84 @@ x = 20; // 这里将导致*p2的值为20
 /* 指针和指向的值都不可以改 */
 const int* const p1 = &x;
 x = 1000; // 即时如此我们还是可以通过修改x来修改*p1的值
-
 ```
 
-当在类中使用时候
+我们先来看一段代码和它的输出结果，将让我们看到const字段的本质。
+
+```C++
+     1  #include <iostream>
+     2  #define BUF 1024
+     3
+     4
+     5  int main(){
+     6
+     7          const int t = 10;
+     8          int const x = 20;
+     9
+    10          int buf_size = BUF;
+    11
+    12
+    13          int *p = (int*)&t;
+    14          *p = 99;
+    15
+    16          printf("t  = %d\n", t);
+    17          printf("*p = %d\n", *p );
+    18
+    19
+    20          return 0;
+    21
+    22
+    23  }
+```
+
+__输出结果将打印10和99__ ，也就是说我们虽然修改了`t处地址的值`，但是它打印的值还是为10，这怎么可能，之前看到有人说是`预编译器`搞的鬼， __它会将其const的值替换为对应的数字__ ，但是当我使用-E字段后，并没有发生如此，只有BUF的值被替换为1024。
+我们使用gdb调试发现：
+```shell
+(gdb) p t
+$6 = 10
+(gdb) p &t
+$7 = (const int *) 0x7fffffffe574
+(gdb) p p
+$8 = (int *) 0x7fffffffe574
+(gdb) p *p
+$9 = 10
+(gdb) n
+Breakpoint 3, main () at target.cpp:20
+20              return 0;
+(gdb) p t
+$10 = 99
+(gdb) p *p
+$11 = 99
+```
+没问题，t处地址的值确实改为99了，但为啥会打印出10？
+使用汇编查看一下当时发生了什么
+```shell
+   0x0000000000400757 <+48>:    mov    QWORD PTR [rbp-0x10],rax
+   0x000000000040075b <+52>:    mov    rax,QWORD PTR [rbp-0x10]
+   0x000000000040075f <+56>:    mov    DWORD PTR [rax],0x63
+=> 0x0000000000400765 <+62>:    mov    esi,0xa
+   0x000000000040076a <+67>:    mov    edi,0x400885
+   0x000000000040076f <+72>:    mov    eax,0x0
+   0x0000000000400774 <+77>:    call   0x4005e0 <printf@plt>
+   0x0000000000400779 <+82>:    mov    rax,QWORD PTR [rbp-0x10]
+```
+可以看到，当代码跑到`printf`的时候 __将寄存器esi的值压入0xa__ 也就是10，之后 `call printf@plt`调用了printf打印出了10，其实是编译器在编译的时候将t改为了固定的值！
+
+
+
+#### 面向对象使用时:
 
 ```C++
 class Test{
 
 public:
 
-    const int test; // 不能修改，只能在对象初始化的时候初始化
+    const int test; // 不赋值，只能在对象初始化的时候初始化(列表初始化)
     
     int x;
     int y;
+    
+    mutable int z;
     
 public:
 
@@ -167,7 +233,9 @@ public:
 
 };
 ```
-其中 __test1()常成员函数是无法修改普通对象中的x和y的值__ ，这是由于const修饰的就是`this`指针。也就是`void test1() const;`其实是`void test1(const Test* this);`，还记得之前的定义么，这种定义的意思表示的是 __无法修改`this`指向的地址处的值，所以自然无法修改其中x和y的值。__ 
+其中 __test1()常成员函数可以访问x和y的值，但是无法修改普通对象中的x和y的值__ ，这是由于const修饰的就是`this`指针。也就是`void test1() const;`其实是`void test1(const Test* this);`，还记得之前的定义么，这种定义的意思表示的是 __无法修改`this`指向的地址处的值，所以自然无法修改其中x和y的值。__ 
+
+如果在必须在常成员函数中修改某个特定的值，则可以对其定义`mutable`关键字，表示这个值总是可以被改变的， __如其中的`z`变量是可以被常成员函数所改变的。__
 
 ```C++
 const Test* t = new Test(10);
