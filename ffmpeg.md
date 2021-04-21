@@ -133,6 +133,125 @@ int avcodec_close(AVCodecContext *avctx); // 关闭
 `AVFrame`: 储存非压缩的数据(视频对应RGB/YUV像素数据，音频对应PCM采样数据)。
 `AVPacket`: 储存压缩数据(视频对应H.264等码流数据，音频对应AAC/MP3等码流数据)。
 
+AVFormatContext结构体内容(简略)
+
+```C++
+typedef struct AVFormatContext{
+    struct AVInputFormat *iformat; // 输入
+    struct AVOutputFormat *oformat; // 输出
+    AVIOContext *pb; // 输入数据的缓存
+    unsigned int nb_stream; // 音视频流的个数
+    AVStream **streams; // 音视频流
+    char filename[1024]; // 文件名
+    int bit_rate; // 比特率(单位bps，转换为kbps除以1000)
+    int64_t duration; // 时长(单位:us,1x10^6次方)
+    enum CodecID video_codec_id;
+    enum CodecID audio_codec_id;
+    AVDictionary *metadata; // 元数据 -------|
+};                                          |
+        |-----------------------------------|
+//      |
+typedef struct AVDictionaryEntry{
+    char *key;
+    char *value;
+} AVDictionaryEntry;
+
+```
+
+AVIOContext结构体(简略)
+
+```C++
+typedef struct{
+    unsigned char *buffer; // 缓存开始的位置，其中储存着ffmpeg读入的数据
+    int buffer_size; // buf长度
+    unsigned char *buf_ptr; // 当前位置(current position in the buffer)
+    unsigned char *buf_end; //  缓存结束的位置
+    
+    void *opaque; // URLContext结构体
+    /* 以下是开始时传入的那坨 */
+    int (*read_packet)(void *opaque, uint8_t *buf, int buf_size);
+    int (*write_packet)(void *opaque, uint8_t *buf, int buf_size);
+    int64_t (*seek)(void *opaque, int64_t offset, int whence);
+
+};
+/* 每种协议对应一种结构体  */
+typedef struct URLProtocol {
+	const char *name;
+	int (*url_open)(URLContext *h, const char *url, int flags);
+	int (*url_read)(URLContext *h, unsigned char *buf, int size);
+	int (*url_write)(URLContext *h, const unsigned char *buf, int size);
+	int64_t (*url_seek)(URLContext *h, int64_t pos, int whence);
+	int (*url_close)(URLContext *h);
+	struct URLProtocol *next;
+	int (*url_read_pause)(URLContext *h, int pause);
+	int64_t (*url_read_seek)(URLContext *h, int stream_index,
+		int64_t timestamp, int flags);
+	int (*url_get_file_handle)(URLContext *h);
+	int priv_data_size;
+	const AVClass *priv_data_class;
+	int flags;
+	int (*url_check)(URLContext *h, int mask);
+} URLProtocol;
+/* file协议 */
+URLProtocol ff_file_protocol = {
+    .name                = "file",
+    .url_open            = file_open,
+    .url_read            = file_read,
+    .url_write           = file_write,
+    .url_seek            = file_seek,
+    .url_close           = file_close,
+    .url_get_file_handle = file_get_handle,
+    .url_check           = file_check,
+};
+/* rtmp协议 */
+
+URLProtocol ff_rtmp_protocol = {
+    .name                = "rtmp",
+    .url_open            = rtmp_open,
+    .url_read            = rtmp_read,
+    .url_write           = rtmp_write,
+    .url_close           = rtmp_close,
+    .url_read_pause      = rtmp_read_pause,
+    .url_read_seek       = rtmp_read_seek,
+    .url_get_file_handle = rtmp_get_file_handle,
+    .priv_data_size      = sizeof(RTMP),
+    .flags               = URL_PROTOCOL_FLAG_NETWORK,
+};
+/* udp协议 */
+URLProtocol ff_udp_protocol = {
+    .name                = "udp",
+    .url_open            = udp_open,
+    .url_read            = udp_read,
+    .url_write           = udp_write,
+    .url_close           = udp_close,
+    .url_get_file_handle = udp_get_file_handle,
+    .priv_data_size      = sizeof(UDPContext),
+    .flags               = URL_PROTOCOL_FLAG_NETWORK,
+};
+```
+
+AVCodecContext结构体(简略)
+
+```C++
+typedef struct AVCodecContext{
+    enum AVMediaType codec_type; // 编码器类型
+    struct AVCodec *codec; // 采用的解码器(H.264, MPEG2..)
+    int bit_rate; // 比特率
+    uint8_t *extradata; 
+    itn extradata_size; // 针对特定编码器的附加信息,比如h.264储存方式pps，sps
+    AVRational time_base; // 可以把PTS转化为实际时间
+    int width, height; // 宽高
+    int refs; // 运动参考帧个数
+    int sample_rate; // 采样率
+    int channels; // 声道数
+    enum AVSampleFormat sample_fmt; // 采样格式
+    int profile;
+    int level;
+/* 以上许多都是在编码时候使用 */
+};
+```
+
+
 
 
 
