@@ -1,0 +1,55 @@
+# CMAKE EXP
+
+### 1.初始化
+
+设置一个cmake所需要的最低版本，FATAL_ERROR表示小于此版本为致命错误。
+`cmake_minimun_required(VERSION 3.5 FATAL_ERROR)`
+
+声明项目名字为test1，语言使用C++(CXX)
+`project(test1 LANGUAGES CXX)`
+
+将编译出一个名为hello-world的可执行文件，它由hello-world.cpp生成
+__add_executable ( hello-world hello-world.cpp )__
+
+
+### 2. 生成静态链接库
+
+```shell
+add_library(
+    message # 库名
+    STATIC  # 生成库的方式，这里是静态链接库
+    Target.hpp # 头文件
+    Target.cpp # 
+)
+```
+以上代码将生成静态链接库`libmessage.a`，在使用可以直接链接名字`message`即可。
+其中的 __STATIC__ 字段也可以改为 __SHARED__ 表明生成动态链接库
+最后在编写cmake的时候先由源代码生成所谓的`目标文件`，之后再进行链接静态链接库
+`target_link_libraries(hello-world message)`。这里链接器会将其链接成一个可执行文件。
+
+### 3. 条件语句
+
+使用方法如下
+```shell
+if (变量名字)
+    分支1
+else()
+    分支2
+endif()
+```
+有几个可以使用的函数如set和message，list
+`set(变量名 变量中存的)`
+如
+```shell
+set(USE_LIBRARY OFF) # 设置了一个变量USE_LIBRARY 并且将其设置为OFF
+message(STATUS "${USE_LIBRARY}") # 将变量USE_LIBRARY打印。
+list(APPEND _source Target.h Target.cpp) # 将Target添加到列表_source中
+```
+
+### 4. 导入包
+
+`find_package(<PackageName> <version> <>)`
+如 
+```shell
+find_package(ffmpeg require)
+```
