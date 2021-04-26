@@ -368,6 +368,103 @@ int main(){
 即将右边的t2当作函数operator的参数传入。
 
 
+### 8.关于std::function和std::bind
+
+`std::function`允许我们保存一个可以调用的对象，如
+
+```C++
+
+int add(int x, int y){return x + y;}
+/* 生成一个可以保存int返回值和2个int形参的可调用对象new_function */
+std::function<int(int, int)> new_function = add;
+
+/* 之后我们可以使用 */
+new_function(10, 20);
+/* 又或者直接使用原函数都将返回相同的值 */
+add(10, 20);
+```
+
+`std::bind`允许我们提前绑定对应的可以调用的对象和其参数。将调用对象和参数绑定为一个仿函数。
+
+```C++
+int add(int x, int y){return x+y;}
+
+auto new_function = std::bind(add, 10, 20);
+/* 之后调用new_function都将只会传入10和20 */
+new_function(); // 返回30
+
+/* 可变参数，绑定20到第二个参数位置，保留第一个参数位置 */
+auto new_function2 = std::bind(add, std::placeholders::_1, 20);
+```
+__我们可以使用`std::placeholders::_1`来充当占位符号__ 。std::bind绑定一个成员函数时候：
+
+```C++
+class Test{
+public:
+    int add(int x, int y){
+        return x + y;
+    }
+};
+
+Test t;
+auto new_function = std::bind(&Test::add, &t, 10, 20);
+```
+必须将其函数指针传入，并且在第二个参数中还需要指定所在的对象！。
+
+
+### 9. 智能指针！
+
+C++11标准引入了智能指针，它帮助我们管理一个动态内存的释放动作。使用 __shared_ptr< T >__ 可以将指向的地址位置引用数量增加1，当有另外一个智能指针指向时候，引用数量为2，当引用数量减少至0时，将释放指向地址的内存。
+
+```C++
+#include <iostream>
+#include <memory>
+
+
+int main(){
+
+	int *x = new int;
+	*x = 10;
+	int *y = x; /* 偷偷保存一下值 */
+	/* 初始化 */
+	std::shared_ptr<int> p1(x);
+	std::shared_ptr<int> p2 = p1;
+	printf("ref: %d\n", p2.use_count());
+	p1.reset(); /* 删除智能指针，p1将指向空 */
+	printf("ref: %d\n", p2.use_count());
+	p2.reset(); /* 删除，x的地址将被释放 */
+	printf("&x: %p\n", y);
+	printf("x: %d\n", *x); /* x处的内存已经释放了，打印出的东西是垃圾数据 */
+   /* 不仅如此，还有概率崩掉，毕竟可能访问到一些不该访问的内存！ */
+}
+``` 
+
+__weak_ptr< T >__ 智能指针一般配合 __shared_ptr< T >__ 智能指针，它所指向的内存空间是没有访问权限的，也就是 __weak_ptr< T >__是没有`*`和`->`重载符的。但是我们可以通过弱智能指针来判断所指向的地址是否已经过期。也可以提升权限，称为 __shared_ptr< T >指针。
+
+```C++
+#include <iostream>
+#include <memory>
+int main(){
+	int *x = new int;
+	*x = 10;
+	int *y = x;
+
+	std::shared_ptr<int> p1(x);
+	/* 获取弱智能指针 */
+	std::weak_ptr<int> wp = p1;
+	std::shared_ptr<int> p2 = p1;
+	printf("ref: %d\n", wp.use_count());
+	p1.reset(); /* 删除智能指针，p1将指向空 */
+	printf("ref: %d\n", wp.use_count());
+	auto p3 = wp.lock(); // 提升权限，这个操作将使得引用+1
+	p2.reset(); /* 删除，x的地址将被释放 */
+	printf("&x: %p\n", y);
+	printf("x: %d\n", *x);
+	printf("*p3: %d\n", *p3);
+}
+```
+
+
  
 
 
