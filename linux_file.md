@@ -1,4 +1,19 @@
-[TOC]
+- [linux-file](#linux-file)
+  - [一、函数](#一函数)
+    - [1. open函数](#1-open函数)
+    - [2. close函数](#2-close函数)
+    - [3. lseek函数](#3-lseek函数)
+    - [4. read函数](#4-read函数)
+    - [5. write函数](#5-write函数)
+    - [6. pread函数与pwrite函数](#6-pread函数与pwrite函数)
+    - [7. dup函数和dup2函数](#7-dup函数和dup2函数)
+    - [8.readv和writev函数](#8readv和writev函数)
+    - [9. 储存映射IO函数mmap](#9-储存映射io函数mmap)
+  - [二、文件共享](#二文件共享)
+    - [1. 维护文件的数据结构](#1-维护文件的数据结构)
+  - [三、文件权限](#三文件权限)
+    - [1.文件类型](#1文件类型)
+    - [2. 权限](#2-权限)
 # linux-file
 ## 一、函数
 ### 1. open函数
