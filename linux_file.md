@@ -128,5 +128,178 @@ fd为指向的文件，off表示文件偏移量
 
 例如有两个进程A与B，A和B都打开了相同的文件(没有使用`O_APPEND`标志位)，A和B的进程中都有着自己独立的 __文件表项__，有着自己的 __文件偏移量__，文件初始大小1500， __之后A使用lseek获取了文件大小__， __想往文件尾部写入100字节__，但是巧合的是这时候内核`切换`了进程。进程B开始运行，进程B进行和A一样的操作， __lseek文件得到1500__，写入100字节，之后文件长度 __更新到1600__。内核再次切换到进程A运行， __从1500处开始写入__，进而发生错误。 __如果该用O_APPEND方法就可以避免此问题，因为O_APPEND标志位是偏移量+文件长度的方式，可以实时获取真正的文件长度，但是这种方法也存在问题__。另一种解决方式正是`原子操作`。
 
+## 三、文件权限
+
+### 1.文件类型
+
+linux提供许多API来获取文件信息的函数
+
+```C
+#include <sys/stat.h>
+
+int stat(const char* pathname, struct stat* buf);
+int fstat(int fd, struct stat *buf);
+int lstat(const char* pathname, struct stat* buf);
+int fstatat(int fd, const char* pathname, struct stat* buf, int flag);
+
+// 成功return 0，出错return -1
+```
+
+对于返回的`结构体stat`的定义如下
+
+```C
+struct stat{
+    mode_t          st_mode; /* 文件类型和权限都存储在此 */
+    ino_t           st_ino; /* i-node节点个数 */
+    dev_t           st_dev;
+    dev_t           st_rdev;
+    nlink_t         st_nlink;
+    uid_t           st_uid; /* 所有者ID */
+    gid_t           st_gid; /* 所有组ID */
+    off_t           st_size; /* 文件长度，主要用于普通文件 */
+    struct timespec st_atime; /* 最后访问时间 */
+    struct timespec st_mtime; /* 最后修改时间 */
+    struct timespec st_ctime; /* 最后改变文件状态时间 */
+    blksize_t       st_blksize;
+    blkcnt_t        st_blocks; /* 磁盘中分配了多少个块 */
+};
+```
+
+对于其中比较常用的几个字段，如st_mode可以使用Linux所定义的宏来进行访问。
+```C
+S_ISREG() /* 是否为普通文件 */
+S_ISDIR() /* 是否为目录文件 */
+S_ISCHR() /* 字符特殊文件 */
+S_ISBLK() /* 块特殊文件 */
+S_ISFIFO() /* 管道符文件 */
+S_ISLNK() /* 符号链接 */
+S_ISSOCK() /* 是否为套接字 */
+```
+
+### 2. 权限
+
+Linux中有许多关于ID概念
+    
+    * 实际用户ID
+    * 实际组ID
+    * 有效用户ID
+    * 有效组ID
+    * 附属组ID
+    * 保存的设置用户ID
+    * 保存的设置组ID
+
+对于stat结构体中存在的两个字段`st_uid`和`st_gid`分别对应 __文件的所有者__ 和 __文件的所有者组__ 。 当我们以`swagger`用户登陆时候，我们所登陆的那个shell的ID也就是`swagger`用户的ID，称为 __实际用户ID和实际用户组ID__ 。
+我们可以通俗的暂时理解 __实际用户ID和实际用户组ID是一个`操作者的权限`__ ，而 __有效用户ID和有效用户组ID是一个`运行起来的进程的权限`__ ，带着这个暂时的理解，我们来看一个例子。
+当一个可执行文件执行的时候，这个文件所执行后生成的进程会有一个 __有效用户ID和有效用户组ID__ ，它们通常就是这个文件(可执行文件)的 __执行者的实际用户ID__ 。当然这个所谓的 __执行者用户ID到底有没有权限执行这个文件我们先不讨论__ ，假设`swagger`用户可以执行一个文件，那么那个文件执行后生成的进程的 __有效用户ID和有效用户组ID__ 就是`swagger`用户的 __实际用户ID和实际用户组ID__ 。
+我们先创建如下程序：
+```C
+int main(){
+    printf("uid:  %d\n", getuid());
+    printf("gid:  %d\n", getgid());
+    printf("euid: %d\n", geteuid());
+    printf("egid: %d\n", getegid());
+}
+```
+我们使用root用户创建以上程序，并且编译得到`a.out`文件，使用`ls -l`查看权限如下:
+```shell 
+-rwxr-xr-x 1 root root 8712 Apr 27 16:02 a.out
+```
+可以看到任何人都用x权限，也就是执行权限。我们使用root先运行一下得到以下结果:
+```shell
+root@test:$ id
+uid=0(root) gid=0(root) groups=0(root)
+root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+```
+现在换成swagger用户，先查看swagger用户的id:
+```shell
+swagger@test:$ id
+uid=1001(swagger) gid=1001(swagger) groups=1001(swagger)
+swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 1001
+egid: 1001
+```
+
+通过上面的例子可以看到确实当一个文件被运行时候，它的 __有效用户ID和有效用户组ID__ 是和当前的 __运行者(运行者的实际用户ID和实际用户组ID)__ 有关的。
+
+但以上结论并不是一定的，我们可以通过`st_mode`标志位设置一个文件运行时候的 __有效用户ID和有效用户组ID__ 。我们使用`chmod u+s a.out`将a.out的设置用户ID标志位设为有效，之后我们再使用`root`和`swagger`各运行一次得到：
+
+```shell
+root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+```
+```shell
+swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 0
+egid: 1001
+```
+以上可以看到，当使用swagger运行之后， __`a.out`进程的`euid`也就是`有效用户ID`变成了0__ 。现在，谜题已经解开。
+__uid和gid称为实际用户ID和实际用户组ID的，是用来表示`我是谁？`__ 。
+__euid和egid称为有效用户ID和有效用户组ID的，是用来表示`我有多少权限？我能以谁的名义来执行这个程序？`__ 。接下来我们来验证这个想法
+
+```C
+#include <unistd.h>
+#include <sys/fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+int main(){
+    printf("uid:  %d\n", getuid());
+    printf("gid:  %d\n", getgid());
+    printf("euid: %d\n", geteuid());
+    printf("egid: %d\n", getegid());
+    int fd = open("/root/test", O_RDONLY);
+    if (fd < 0){
+            printf("open() fial!\n");
+            printf("%s\n", strerror(errno));
+            exit(1);
+    }
+    char *buf = malloc(128);
+
+    read(fd, buf, 128);
+    printf("content: %s\n", buf);
+    close(fd);
+}
+```
+我们尝试使用`a.out`来读取`/root/test`文件，这个文件是在`/root`目录下， __需要拥有root权限才可以读取__ !不同用户运行得到:
+
+```shell
+root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+content: this is root's file! no one can see this except root!!
+```
+```shell
+swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 1001
+egid: 1001
+open() fial!
+Segmentation fault
+```
+`swagger`没有权限读取`/root`下文件，必定读取失败。我们尝试使用`chmod u+s a.out`将`a.out`的 __有效运行ID__ 设置为root __(运行起来的程序以root的名义来跑，但是本身还是属于swagger用户的进程)__ ，结果:
+
+```shell
+swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 0
+egid: 1001
+content: this is root's file! no one can see this except root!!
+```
+__可以看到，`a.out`是一个swagger的进程，但是是以`root`的权限来运行的。由此，我们成功读取到了内容__ 。
 
 
