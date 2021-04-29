@@ -238,8 +238,10 @@ public:
 public:
 
     Test(int t): test(t){}
-
-    void test1() const; // 常成员函数
+    // 常成员函数
+    int test1() const{
+        return test; 
+    } 
     
     void test2();
 
@@ -261,8 +263,23 @@ t->test1();
 const Test* t = new Test(10);
 /* 限制的是指针的值，对于指针指向的值不影响，所以所有函数都能调用 */
 Test* const t = new Test(20);
-
 ```
+
+上述的`const Test* t`只能调用常成员函数有些人可能会认为是一个固定的`"约定"`，但其实都是编译器的问题，如果从编译器的角度来看待这个语法的话: __一个const声明的对象，然后再调用这个对象的`某个函数`，由于const对象是肯定不允许改变其`对象中属性的值`，当我们调用一个`const声明的对象的成员函数`时，编译器不知道你调用的`成员函数`会不会改变其内部的值，因而报错__ ! 比如:
+
+```C++
+class Test{
+public:
+    int x;
+    void change(){
+        x = 100;
+    }
+};
+
+const Test t;
+t.change(); // 报错！，t是const类型，不可改变！
+```
+__这也就解释了为什么`const声明的对象`只能调用`const方法`，因为这让编译器`安心`__ 。
 
 ### 5. friend关键字
 
