@@ -394,7 +394,47 @@ int main(){
 //输出NO
 ```
 
-即将右边的t2当作函数operator的参数传入。
+```C++
+class Object;
+Object object1, object2;
+Object::operator += (this, const Object& r); // this是编译器自行加上的，我们不必写也不可以写！
+object1 += object2;
+```
+上述的语法编译器会将`+=`符号作用于`object1`这个对象(大部分都是作用于左边的对象)，当`object1`对象中真的重载了`+=`符号，那么编译即可通过。
+
+##### operator的返回值
+
+```C++
+class Inter{
+public:
+    Inter(int value)
+    : value_(value){}
+    /* 第一种方法 */
+    operator += (const Inter& in){
+        this->value_ = in.value_;
+    }
+    /* 第二种方法 */
+    Inter& operator += (const Inter &in){
+        this->value_ = in.value_;
+        return *this;
+    }
+
+private:
+    int value_;
+
+};
+```
+
+对于没有返回值的`+=重载方法`是可以直接这样调用的
+```C++
+Inter t1(10);
+Inter t2(20);
+Inter t3(30);
+t1 += t2; // 完全没问题---> t1.operator+=(t2);
+t1 += t2 += t3; // 报错！
+```
+__但是当没有返回值的重载方法被上面的方式调用就会发生报错，由于是`void类型`，无返回，则`t2`和`t3`相加之后是没有值的，而`t1+=`这个符号却期待着一个`右值来进行+=操作`__ ！当使用上述第二种定义方法的时候就不会出现错误了。
+
 
 
 ### 8.关于std::function和std::bind
