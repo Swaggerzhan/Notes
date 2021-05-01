@@ -402,7 +402,7 @@ object1 += object2;
 ```
 上述的语法编译器会将`+=`符号作用于`object1`这个对象(大部分都是作用于左边的对象)，当`object1`对象中真的重载了`+=`符号，那么编译即可通过。
 
-##### operator的返回值
+##### 1. operator的返回值
 
 ```C++
 class Inter{
@@ -434,6 +434,59 @@ t1 += t2; // 完全没问题---> t1.operator+=(t2);
 t1 += t2 += t3; // 报错！
 ```
 __但是当没有返回值的重载方法被上面的方式调用就会发生报错，由于是`void类型`，无返回，则`t2`和`t3`相加之后是没有值的，而`t1+=`这个符号却期待着一个`右值来进行+=操作`__ ！当使用上述第二种定义方法的时候就不会出现错误了。
+
+##### 2. operator 重载*和->符号(伪指针)
+
+由于operator操作符号非常的强大，以至于我们可以重载`*`和`->`操作符号， __让一个本身是类实例化出来的对象`很像一个指针`__ ，称为伪指针。
+
+```C++
+template<typename T>
+class PointerLike{
+public:
+    PointerLike(T* pointer)
+        :p_(pointer){}
+    
+    T& operator*() const { /* 重载操作符号*      */
+        return *p;
+    }
+    T* operator->() const { /* 重载操作符号->    */
+        return px;
+    }
+private:
+    T *p_;
+};
+class Object; /* 假设存在的一个类 */
+
+/* 使用 */
+Object *x = new Object(); /* 创建一个对象Object */
+PointerLike<int> p_x(x);
+Object copy = *p_x; /* 赋值 */
+p_x->func(); /* 假设Objcet中存在func()方法，那么也可以直接调用 */
+```
+
+其实标准库中的iterator也是一个`伪指针`，只不过它需要重载更多的方法，比如`++``--`等等。
+__注：上述的`p_x->func()`操作符重载后`->`符号本该被消耗，并且根据重载函数的返回值可以得知返回的是一个`px`指针，按理说本不该调用`func()`，但其实还是被调用了，这是因为C++里有个规定，就是对于`->`操作符，需要递归的一直调用下去__ !
+
+##### 3. operator重载()符号 (伪函数)
+
+我们可以重载`()`符号，使一个类实例化的对象可以直接再调用`()`符号，让这个对象变得非常的 __像函数__ ，称为伪函数。
+
+```C++
+class FuncLike{
+public:
+    FuncLike(int x)
+    :value_(x) {}
+    /* 重载符号，第二个括号可以放参数 */
+    int operator() () const{
+        return value_;
+    }
+    
+private:
+    int value_;
+};
+FuncLike f(10);
+int ret = f();/* 调用重载(),使用起来像函数 */
+```
 
 
 
@@ -532,6 +585,7 @@ int main(){
 	printf("*p3: %d\n", *p3);
 }
 ```
+
 
 
  
