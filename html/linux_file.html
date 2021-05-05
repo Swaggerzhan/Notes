@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<html>
+    <body>
+        
+        <ul>
+<li><p><a href="#linux-file">linux-file</a></p>
+<ul>
+<li><a href="#%E4%B8%80%E5%87%BD%E6%95%B0">一、函数</a></li>
+<li><a href="#1-open%E5%87%BD%E6%95%B0">1. open函数</a></li>
+<li><a href="#2-close%E5%87%BD%E6%95%B0">2. close函数</a></li>
+<li><a href="#3-lseek%E5%87%BD%E6%95%B0">3. lseek函数</a></li>
+<li><a href="#4-read%E5%87%BD%E6%95%B0">4. read函数</a></li>
+<li><a href="#5-write%E5%87%BD%E6%95%B0">5. write函数</a></li>
+<li><a href="#6-pread%E5%87%BD%E6%95%B0%E4%B8%8Epwrite%E5%87%BD%E6%95%B0">6. pread函数与pwrite函数</a></li>
+<li><a href="#7-dup%E5%87%BD%E6%95%B0%E5%92%8Cdup2%E5%87%BD%E6%95%B0">7. dup函数和dup2函数</a></li>
+<li><a href="#8readv%E5%92%8Cwritev%E5%87%BD%E6%95%B0">8.readv和writev函数</a></li>
+<li><a href="#9-%E5%82%A8%E5%AD%98%E6%98%A0%E5%B0%84io%E5%87%BD%E6%95%B0mmap">9. 储存映射IO函数mmap</a></li>
+<li><a href="#%E4%BA%8C%E6%96%87%E4%BB%B6%E5%85%B1%E4%BA%AB">二、文件共享</a></li>
+<li><a href="#1-%E7%BB%B4%E6%8A%A4%E6%96%87%E4%BB%B6%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84">1. 维护文件的数据结构</a></li>
+<li><a href="#%E4%B8%89%E6%96%87%E4%BB%B6%E6%9D%83%E9%99%90">三、文件权限</a></li>
+<li><a href="#1%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B">1.文件类型</a></li>
+<li><a href="#2-%E6%9D%83%E9%99%90">2. 权限</a>
+# linux-file<br/>
+## 一、函数<br/>
+### 1. open函数
+<strong>int open(const char* path, mode_t mode);</strong></li>
+</ul></li>
+<li><p>O_RDONLY <strong>只读打开</strong>  RD--&gt;read.  ONLY</p></li>
+<li><p>O_WRONLY <strong>只写打开</strong>  WD--&gt;write. ONLY</p></li>
+<li><p>O_RDWD <strong>读写打开</strong>    WD--&gt;write. RD--&gt;read</p></li>
+<li><p>O_EXEC <strong>只执行打开</strong></p></li>
+<li><p>O_SEARCH <strong>只搜索打开</strong></p></li>
+<li><p>O_APPEND <strong>追加，写的时候追加到文件尾部</strong></p></li>
+<li><p>O_CREAT <strong>文件不存在则创建(需要添加访问权限..)</strong></p></li>
+<li><p>O_NONBLOCK <strong>将文件描述符设置为非堵塞型</strong></p></li>
+<li><p>O_SYNC <strong>使每次write等待物理I/O操作完成</strong></p></li>
+<li><p>O_TRUNC (..)</p></li>
+</ul>
+
+<p>以上是mode_t的参数，其中(O_RDWD | O_CREAT | O_TRUNC)三个参数一起传入可以实现和<code>creat()</code>函数一样的效果，<code>creat()</code>函数是早期unix系统的遗留问题额外添加，现在可以由<code>open()</code>函数直接代替。对于打开文件错误等其他原因会使linux设置errno变量，对应某些错误的原因， <strong>其中需要注意的是定义<code>errno</code>变量的头文件为<code>&lt;errno.h&gt;</code>而定义打印字符错误提示符的函数<code>char *strerror(int errno);</code>函数是定义在头文件<code>&lt;string.h&gt;</code>中的</strong> 。</p>
+
+<h3 id="toc_0">2. close函数</h3>
+
+<p><strong>int close(int fd);</strong><br/>
+关闭一个文件描述符号，同时也会关闭设置在这个文件上的所有<code>记录锁</code>。</p>
+
+<h3 id="toc_1">3. lseek函数</h3>
+
+<p><strong>off_t lseek(int fd, off_t offset, int whence);</strong></p>
+
+<ul>
+<li>SEEK_CUR <strong>返回当前文件位置，如果offset有数据则将偏移量增加到对应的fd中</strong></li>
+<li>SEEK_SET <strong>将文件偏移量设置为offset</strong></li>
+<li>SEEK_END <strong>返回文件长度，如果offset有数据则将文件长度增加offset</strong></li>
+</ul>
+
+<blockquote>
+<p>其中off_t的原型是 int64_t 也就是 long long型</p>
+</blockquote>
+
+<p>用来查看文件描述符fd当前读取到的位置偏移量，其中实现方法使用的是fd所对应的结构体(之后解释)。使用对象是网络套接字和标准输入输出描述符则会出现报错。</p>
+
+<h3 id="toc_2">4. read函数</h3>
+
+<p><strong>ssize_t read(int fd, void* buf, size_t nbytes);</strong></p>
+
+<p>read成功，返回读到的字节数。如果已经达到文件尾部，则返回0。<br/>
+如果 <code>size_t nbytes</code>所给定的数值过大，超过文件描述符中数据的长度，则直接全部读取，并且返回<code>fd中所有的数据的 长度</code>，<code>下一次读取时返回 0</code>。<br/>
+如果读取的是<code>管道、网络套接字或者标准输入与标准输出</code>且其中没有数据，则会出现 <strong>堵塞</strong>，将描述符设置为 <strong>NONBLOCK</strong>则会直接返回<code>-1并且设置errno</code>。read函数不对<code>buf</code>参数负责，如果 <strong>buf空间小于nbytes和fd中数据长度,</strong>  <strong>空间大小不够的buf持续读入可能会出现<code>越界</code>情况。</strong></p>
+
+<h3 id="toc_3">5. write函数</h3>
+
+<p><strong>ssize_t write(int fd, void* buf, size_t nbytes);</strong></p>
+
+<p>write函数则和read函数返回值相同，通过fd所绑定的结构体中所记录的当前文件偏移量写入数据。其中<code>O_APPEND</code>方式打开会影响文件状态标志(细节见文件的数据结构)。如果<code>size_t nbytes</code>的数值超过buf，那么只会写入buf中的所有数据并且返回buf的长度。出错时候设置<code>errno</code>。</p>
+
+<h3 id="toc_4">6. pread函数与pwrite函数</h3>
+
+<p><strong>ssize_t pread(int fd, void* buf, size_t nbytes, off_t offset);</strong><br/>
+<strong>ssize_t pwrite(int fd, const void* buf, size_t nbytes, off_t offset);</strong></p>
+
+<p>调用pread方法相当于调用了lseek后调用read，与自己手动调用这两个函数的区别：</p>
+
+<ul>
+<li>pread运行时不可中断其定位和读操作。</li>
+<li>不更新当前文件偏移量。</li>
+</ul>
+
+<h3 id="toc_5">7. dup函数和dup2函数</h3>
+
+<p><strong>int dup(int fd);</strong><br/>
+<strong>int dup2(int fd, int fd2);</strong></p>
+
+<p><strong>dup和dup2函数是干什么的用一张图片就可以清楚解释：</strong><br/>
+<img src="./linux_file_pic/linux_file3.png" alt=""/><br/>
+返回一个新的文件描述符，它所指向的文件和参数fd指向的文件相同。</p>
+
+<p>dup函数返回一个新文件描述符，是当前文件描述符中最小值。对于dup2，可以使用fd2参数来指定新的描述符的值，如果fd2已经打开，就先关闭fd2。如果fd2等于fd，则直接返回fd2。</p>
+
+<h3 id="toc_6">8.readv和writev函数</h3>
+
+<p>readv和writev即散布读和散布写，可以在一次调用读写多个缓冲区。使用这种方案比多次调用read或者write函数效率要高，毕竟谁也不想调用相同的系统调用多次，徒增切换花销。</p>
+
+<pre><code class="language-cpp">#include &lt;sys/uio.h&gt;
+
+ssize_t readv(int fd, const iovec *iov, int iovcnt);
+ssize_t writev(int fd, const iovec* iov, int iovcnt);
+// iov是一个指向iovec结构体的数组，iovcnt表示数组个数
+
+struct iovec{
+    void *iov_base; /* 起始地址 */
+    size_t iov_len;/* 长度 */
+};
+</code></pre>
+
+<h3 id="toc_7">9. 储存映射IO函数mmap</h3>
+
+<p>储存映射能将磁盘上的一个文件直接映射到内存中的一个缓冲区上，当从缓存区中读写信息就等同于在文件中读写信息，即在不实用read和write的情况下执行IO操作。</p>
+
+<pre><code class="language-cpp">#include &lt;sys/mman.h&gt;
+/* 返回值为映射区指向的地址 */
+void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
+/* 改变映射区的权限 */
+int mprotect(void *addr, size_t len, int prot);
+/* 关闭映射区 */
+int munmap(void* addr, size_t len);
+</code></pre>
+
+<p>addr参数指向一个地址，表示将磁盘数据映射到这个地址上，建议设置为0，由操作系统接管。<br/>
+prot表示映射地区的保护要求，可按位打开</p>
+
+<pre><code class="language-cpp">PROT_READ // 映射区可读
+PROT_WRITE // 映射区可写
+PROT_EXEC // 映射区可执行
+PROT_NONE // 映射区不可访问
+</code></pre>
+
+<p>flag字段可以用来设置映射区的属性等</p>
+
+<pre><code class="language-cpp">MAP_FIXED // 必返回指定的addr地址，不建议
+MAP_SHARED // 对于映射区的操作等同于对文件的操作
+MAP_PRIVATE // 对于缓存的操作不改变文件本身 调试可用
+</code></pre>
+
+<p>fd为指向的文件，off表示文件偏移量<br/>
+最后，fork的子进程是可以继承映射区的，但是exec后就不共享了。</p>
+
+<h2 id="toc_8">二、文件共享</h2>
+
+<h3 id="toc_9">1. 维护文件的数据结构</h3>
+
+<p>每一个进程中都存在一个 <strong>进程表项</strong>，其中存有<code>fd</code>所对应的<code>文件指针</code>，<code>文件指针</code>又指向 <strong>文件表项</strong>，文件表项中储存着当前<code>文件状态标志</code>，<code>当前文件偏移量</code>(只针对打开此文件的进程，每一个进程维护着自己的文件偏移量)，以及<code>v节点指针</code>(linux中不使用vnode)。<br/>
+<img src="./linux_file_pic/linux_file1.png" alt=""/></p>
+
+<p>如果两个独立的进程打开了相同的文件：<br/>
+<img src="./linux_file_pic/linux_file2.png" alt=""/></p>
+
+<p>使用<code>O_APPEND</code>打开方式的时候， <strong>每次write往文件中写入都会实时通过文件v节点指针(i节点指针)获取文件长度</strong>，并且加上偏移量进行写入，这种方法和使用lseek函数实现的有差别。</p>
+
+<p>例如有两个进程A与B，A和B都打开了相同的文件(没有使用<code>O_APPEND</code>标志位)，A和B的进程中都有着自己独立的 <strong>文件表项</strong>，有着自己的 <strong>文件偏移量</strong>，文件初始大小1500， <strong>之后A使用lseek获取了文件大小</strong>， <strong>想往文件尾部写入100字节</strong>，但是巧合的是这时候内核<code>切换</code>了进程。进程B开始运行，进程B进行和A一样的操作， <strong>lseek文件得到1500</strong>，写入100字节，之后文件长度 <strong>更新到1600</strong>。内核再次切换到进程A运行， <strong>从1500处开始写入</strong>，进而发生错误。 <strong>如果该用O_APPEND方法就可以避免此问题，因为O_APPEND标志位是偏移量+文件长度的方式，可以实时获取真正的文件长度，但是这种方法也存在问题</strong>。另一种解决方式正是<code>原子操作</code>。</p>
+
+<h2 id="toc_10">三、文件权限</h2>
+
+<h3 id="toc_11">1.文件类型</h3>
+
+<p>在理解文件权限之前，我们先了解一下文件权限是怎么存储在linux中的。linux提供许多API来获取文件信息的函数</p>
+
+<pre><code class="language-c">#include &lt;sys/stat.h&gt;
+
+int stat(const char* pathname, struct stat* buf);
+int fstat(int fd, struct stat *buf);
+int lstat(const char* pathname, struct stat* buf);
+int fstatat(int fd, const char* pathname, struct stat* buf, int flag);
+
+// 成功return 0，出错return -1
+</code></pre>
+
+<p>对于返回的<code>结构体stat</code>的定义如下</p>
+
+<pre><code class="language-c">struct stat{
+    mode_t          st_mode; /* 文件类型和权限都存储在此 */
+    ino_t           st_ino; /* i-node节点个数 */
+    dev_t           st_dev;
+    dev_t           st_rdev;
+    nlink_t         st_nlink;
+    uid_t           st_uid; /* 所有者ID */
+    gid_t           st_gid; /* 所有组ID */
+    off_t           st_size; /* 文件长度，主要用于普通文件 */
+    struct timespec st_atime; /* 最后访问时间 */
+    struct timespec st_mtime; /* 最后修改时间 */
+    struct timespec st_ctime; /* 最后改变文件状态时间 */
+    blksize_t       st_blksize;
+    blkcnt_t        st_blocks; /* 磁盘中分配了多少个块 */
+};
+</code></pre>
+
+<p>对于其中比较常用的几个字段，如st_mode可以使用Linux所定义的宏来进行访问。</p>
+
+<pre><code class="language-c">S_ISREG() /* 是否为普通文件 */
+S_ISDIR() /* 是否为目录文件 */
+S_ISCHR() /* 字符特殊文件 */
+S_ISBLK() /* 块特殊文件 */
+S_ISFIFO() /* 管道符文件 */
+S_ISLNK() /* 符号链接 */
+S_ISSOCK() /* 是否为套接字 */
+</code></pre>
+
+<h3 id="toc_12">2. 权限</h3>
+
+<p>Linux中有许多关于ID概念</p>
+
+<pre><code class="language-text">* 实际用户ID
+* 实际组ID
+* 有效用户ID
+* 有效组ID
+* 附属组ID
+* 保存的设置用户ID
+* 保存的设置组ID
+</code></pre>
+
+<p>对于stat结构体中存在的两个字段<code>st_uid</code>和<code>st_gid</code>分别对应 <strong>文件的所有者</strong> 和 <strong>文件的所有者组</strong> 。 当我们以<code>swagger</code>用户登陆时候，我们所登陆的那个shell的ID也就是<code>swagger</code>用户的ID，称为 <strong>实际用户ID和实际用户组ID</strong> 。<br/>
+我们可以通俗的暂时理解 <strong>实际用户ID和实际用户组ID是一个<code>操作者的权限</code></strong> ，而 <strong>有效用户ID和有效用户组ID是一个<code>运行起来的进程的权限</code></strong> ，带着这个暂时的理解，我们来看一个例子。<br/>
+当一个可执行文件执行的时候，这个文件所执行后生成的进程会有一个 <strong>有效用户ID和有效用户组ID</strong> ，它们通常就是这个文件(可执行文件)的 <strong>执行者的实际用户ID</strong> 。当然这个所谓的 <strong>执行者用户ID到底有没有权限执行这个文件我们先不讨论</strong> ，假设<code>swagger</code>用户可以执行一个文件，那么那个文件执行后生成的进程的 <strong>有效用户ID和有效用户组ID</strong> 就是<code>swagger</code>用户的 <strong>实际用户ID和实际用户组ID</strong> 。<br/>
+我们先创建如下程序：</p>
+
+<pre><code class="language-c">int main(){
+    printf(&quot;uid:  %d\n&quot;, getuid());
+    printf(&quot;gid:  %d\n&quot;, getgid());
+    printf(&quot;euid: %d\n&quot;, geteuid());
+    printf(&quot;egid: %d\n&quot;, getegid());
+}
+</code></pre>
+
+<p>我们使用root用户创建以上程序，并且编译得到<code>a.out</code>文件，使用<code>ls -l</code>查看权限如下:</p>
+
+<pre><code class="language-shell">-rwxr-xr-x 1 root root 8712 Apr 27 16:02 a.out
+</code></pre>
+
+<p>可以看到任何人都用x权限，也就是执行权限。我们使用root先运行一下得到以下结果:</p>
+
+<pre><code class="language-shell">root@test:$ id
+uid=0(root) gid=0(root) groups=0(root)
+root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+</code></pre>
+
+<p>现在换成swagger用户，先查看swagger用户的id:</p>
+
+<pre><code class="language-shell">swagger@test:$ id
+uid=1001(swagger) gid=1001(swagger) groups=1001(swagger)
+swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 1001
+egid: 1001
+</code></pre>
+
+<p>通过上面的例子可以看到确实当一个文件被运行时候，它的 <strong>有效用户ID和有效用户组ID</strong> 是和当前的 <strong>运行者(运行者的实际用户ID和实际用户组ID)</strong> 有关的。</p>
+
+<p>但以上结论并不是一定的，我们可以通过<code>st_mode</code>标志位设置一个文件运行时候的 <strong>有效用户ID和有效用户组ID</strong> 。我们使用<code>chmod u+s a.out</code>将a.out的设置用户ID标志位设为有效，之后我们再使用<code>root</code>和<code>swagger</code>各运行一次得到：</p>
+
+<pre><code class="language-shell">root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+</code></pre>
+
+<pre><code class="language-shell">swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 0
+egid: 1001
+</code></pre>
+
+<p>以上可以看到，当使用swagger运行之后， <strong><code>a.out</code>进程的<code>euid</code>也就是<code>有效用户ID</code>变成了0</strong> 。现在，谜题已经解开。<br/>
+<strong>uid和gid称为实际用户ID和实际用户组ID的，是用来表示<code>我是谁？</code></strong> 。<br/>
+<strong>euid和egid称为有效用户ID和有效用户组ID的，是用来表示<code>我有多少权限？我能以谁的名义来执行这个程序？</code></strong> 。接下来我们来验证这个想法</p>
+
+<pre><code class="language-c">#include &lt;unistd.h&gt;
+#include &lt;sys/fcntl.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;errno.h&gt;
+int main(){
+    printf(&quot;uid:  %d\n&quot;, getuid());
+    printf(&quot;gid:  %d\n&quot;, getgid());
+    printf(&quot;euid: %d\n&quot;, geteuid());
+    printf(&quot;egid: %d\n&quot;, getegid());
+    int fd = open(&quot;/root/test&quot;, O_RDONLY);
+    if (fd &lt; 0){
+            printf(&quot;open() fial!\n&quot;);
+            printf(&quot;%s\n&quot;, strerror(errno));
+            exit(1);
+    }
+    char *buf = malloc(128);
+
+    read(fd, buf, 128);
+    printf(&quot;content: %s\n&quot;, buf);
+    close(fd);
+}
+</code></pre>
+
+<p>我们尝试使用<code>a.out</code>来读取<code>/root/test</code>文件，这个文件是在<code>/root</code>目录下， <strong>需要拥有root权限才可以读取</strong> !不同用户运行得到:</p>
+
+<pre><code class="language-shell">root@test:$ ./a.out 
+uid:  0
+gid:  0
+euid: 0
+egid: 0
+content: this is root&#39;s file! no one can see this except root!!
+</code></pre>
+
+<pre><code class="language-shell">swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 1001
+egid: 1001
+open() fial!
+Segmentation fault
+</code></pre>
+
+<p><code>swagger</code>没有权限读取<code>/root</code>下文件，必定读取失败。我们尝试使用<code>chmod u+s a.out</code>将<code>a.out</code>的 <strong>有效运行ID</strong> 设置为root <strong>(运行起来的程序以root的名义来跑，但是本身还是属于swagger用户的进程)</strong> ，结果:</p>
+
+<pre><code class="language-shell">swagger@test:$ ./a.out
+uid:  1001
+gid:  1001
+euid: 0
+egid: 1001
+content: this is root&#39;s file! no one can see this except root!!
+</code></pre>
+
+<p><strong>可以看到，<code>a.out</code>是一个swagger的进程，但是是以<code>root</code>的权限来运行的。由此，我们成功读取到了内容</strong> 。</p>
+
+        
+
+
+        
+    </body>
+</html>
