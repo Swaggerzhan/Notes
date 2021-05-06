@@ -50,3 +50,18 @@
     
 * set disassembly-flavor intel 
 * set disassembly-flavor att
+
+
+### 2.关于线程调试
+
+* info thread 查看线程信息
+
+* thread ID 切换到某个线程
+    如果只要调试某个线程，其余线程继续运行，则可以使用
+    * set scheduler-locking off 任何线程运行到固定断点都会暂停。
+    * set scheduler-locking on 只暂停当前调试线程。
+* thread apply ID1 ID2... 命令
+    让线程ID1和线程ID2执行指定的GDB命令，如果想要所有所有线程都执行对应命令则可以使用命令:
+    * thread apply all 命令
+
+
