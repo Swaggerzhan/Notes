@@ -1,3 +1,20 @@
+- [C++ exp](#c-exp)
+    - [1. static 关键字](#1-static-关键字)
+    - [2. 类的构造函数](#2-类的构造函数)
+    - [3. 引用](#3-引用)
+        - [1. 引用和指针](#1-引用和指针)
+        - [2. 右值引用](#2-右值引用)
+    - [4. const关键字](#4-const关键字)
+      - [面向过程使用时:](#面向过程使用时)
+      - [面向对象使用时:](#面向对象使用时)
+    - [5. friend关键字](#5-friend关键字)
+    - [6. class类中的一些需要记住的知识](#6-class类中的一些需要记住的知识)
+    - [7. operator关键字](#7-operator关键字)
+        - [1. operator的返回值](#1-operator的返回值)
+        - [2. operator 重载*和->符号(伪指针)](#2-operator-重载和-符号伪指针)
+        - [3. operator重载()符号 (伪函数)](#3-operator重载符号-伪函数)
+    - [8.关于std::function和std::bind](#8关于stdfunction和stdbind)
+    - [9. 智能指针！](#9-智能指针)
 # C++ exp
 
 ### 1. static 关键字
@@ -89,7 +106,59 @@ public:
  __构造函数可以有多个，即重载__ ，如上例子，使用`Gun *g = new Gun(1, 2);`调用`1.0方式的构造函数`，而`Gun *g = new Gun();`则会调用`2.0的构造函数`。
  拷贝构造函数在一个对象进行拷贝时候会调用，如果没有显式的定义，它也会存在，只不过会出现一些`浅拷贝问题`， __即拷贝后的对象和拷贝前的对象中的指针指向相同区域的内存。__
  
-### 3. 右值引用
+### 3. 引用
+##### 1. 引用和指针
+
+引用和指针使用上是有些许不同的，但是其引用的底层实现也是指针，只不过编译器尽力做到`引用`的样子。
+
+```C++
+int x = 0;
+int *p = &x;
+int &r = x; /* r代表x，即r和x都是0 */
+int x2 = 5; 
+r = x2; /* 由于r和x是相同的，这个改动将导致r和x都为5 */
+int &r2 = r;
+```
+上述程序内存结构:
+![](./c_plus_exp_pic/1.png)
+引用其实就是一个`特殊指针`。
+```C++
+// x32操作系统
+struct Node{ /* 一个链表节点 */
+    int data;
+    Node* pre;
+    Node* next;
+    Node():pre(nullptr),next(nullptr),data(0){}
+};
+int main(){
+    struct Node node; 
+    struct Node* p = new struct Node;
+    struct Node& r = node;
+    cout << sizeof(node) << endl; // 12
+    cout << sizeof(p) << endl; // 4
+    cout << sizeof(r) << endl; // 12
+    
+}
+```
+上述程序对于r打印出来的数值为`12`其实`编译器的欺骗`，`r`大小其实也是`4bytes`， __毕竟引用底层就是一个指针__ ，但至于为啥打印出来为`12`其实就是 __编译器为了实现所谓的特殊的指针__ 。
+比如有一下三种函数声明方式:
+
+```C++
+// 声明
+void func1(Object obj);
+void func2(Object* obj);
+void func3(Object& obj);
+// 调用
+Object obj;
+func1(obj); // 直接传值，需要拷贝操作
+func2(&obj); // 传地址，速度快，但是和传值操作的调用方式不一样，需要多一个取址
+func3(obj); // 传引用，和直接传值书写一样，但传的却是 特殊指针，也就是引用
+```
+
+使用引用可以使得调用方式和传值方式调用一样，但传的是 __特殊指针__ ，不仅速度快，而且接口相同。
+
+
+##### 2. 右值引用
 
 ```C++
 /* a可以取地址，是左值，10不可以取地址，是右值 */
@@ -226,8 +295,10 @@ public:
 public:
 
     Test(int t): test(t){}
-
-    void test1() const; // 常成员函数
+    // 常成员函数
+    int test1() const{
+        return test; 
+    } 
     
     void test2();
 
@@ -249,8 +320,23 @@ t->test1();
 const Test* t = new Test(10);
 /* 限制的是指针的值，对于指针指向的值不影响，所以所有函数都能调用 */
 Test* const t = new Test(20);
-
 ```
+
+上述的`const Test* t`只能调用常成员函数有些人可能会认为是一个固定的`"约定"`，但其实都是编译器的问题，如果从编译器的角度来看待这个语法的话: __一个const声明的对象，然后再调用这个对象的`某个函数`，由于const对象是肯定不允许改变其`对象中属性的值`，当我们调用一个`const声明的对象的成员函数`时，编译器不知道你调用的`成员函数`会不会改变其内部的值，因而报错__ ! 比如:
+
+```C++
+class Test{
+public:
+    int x;
+    void change(){
+        x = 100;
+    }
+};
+
+const Test t;
+t.change(); // 报错！，t是const类型，不可改变！
+```
+__这也就解释了为什么`const声明的对象`只能调用`const方法`，因为这让编译器`安心`__ 。
 
 ### 5. friend关键字
 
@@ -365,7 +451,100 @@ int main(){
 //输出NO
 ```
 
-即将右边的t2当作函数operator的参数传入。
+```C++
+class Object;
+Object object1, object2;
+Object::operator += (this, const Object& r); // this是编译器自行加上的，我们不必写也不可以写！
+object1 += object2;
+```
+上述的语法编译器会将`+=`符号作用于`object1`这个对象(大部分都是作用于左边的对象)，当`object1`对象中真的重载了`+=`符号，那么编译即可通过。
+
+##### 1. operator的返回值
+
+```C++
+class Inter{
+public:
+    Inter(int value)
+    : value_(value){}
+    /* 第一种方法 */
+    operator += (const Inter& in){
+        this->value_ = in.value_;
+    }
+    /* 第二种方法 */
+    Inter& operator += (const Inter &in){
+        this->value_ = in.value_;
+        return *this;
+    }
+
+private:
+    int value_;
+
+};
+```
+
+对于没有返回值的`+=重载方法`是可以直接这样调用的
+```C++
+Inter t1(10);
+Inter t2(20);
+Inter t3(30);
+t1 += t2; // 完全没问题---> t1.operator+=(t2);
+t1 += t2 += t3; // 报错！
+```
+__但是当没有返回值的重载方法被上面的方式调用就会发生报错，由于是`void类型`，无返回，则`t2`和`t3`相加之后是没有值的，而`t1+=`这个符号却期待着一个`右值来进行+=操作`__ ！当使用上述第二种定义方法的时候就不会出现错误了。
+
+##### 2. operator 重载*和->符号(伪指针)
+
+由于operator操作符号非常的强大，以至于我们可以重载`*`和`->`操作符号， __让一个本身是类实例化出来的对象`很像一个指针`__ ，称为伪指针。
+
+```C++
+template<typename T>
+class PointerLike{
+public:
+    PointerLike(T* pointer)
+        :p_(pointer){}
+    
+    T& operator*() const { /* 重载操作符号*      */
+        return *p;
+    }
+    T* operator->() const { /* 重载操作符号->    */
+        return px;
+    }
+private:
+    T *p_;
+};
+class Object; /* 假设存在的一个类 */
+
+/* 使用 */
+Object *x = new Object(); /* 创建一个对象Object */
+PointerLike<int> p_x(x);
+Object copy = *p_x; /* 赋值 */
+p_x->func(); /* 假设Objcet中存在func()方法，那么也可以直接调用 */
+```
+
+其实标准库中的iterator也是一个`伪指针`，只不过它需要重载更多的方法，比如`++``--`等等。
+__注：上述的`p_x->func()`操作符重载后`->`符号本该被消耗，并且根据重载函数的返回值可以得知返回的是一个`px`指针，按理说本不该调用`func()`，但其实还是被调用了，这是因为C++里有个规定，就是对于`->`操作符，需要递归的一直调用下去__ !
+
+##### 3. operator重载()符号 (伪函数)
+
+我们可以重载`()`符号，使一个类实例化的对象可以直接再调用`()`符号，让这个对象变得非常的 __像函数__ ，称为伪函数。
+
+```C++
+class FuncLike{
+public:
+    FuncLike(int x)
+    :value_(x) {}
+    /* 重载符号，第二个括号可以放参数 */
+    int operator() () const{
+        return value_;
+    }
+    
+private:
+    int value_;
+};
+FuncLike f(10);
+int ret = f();/* 调用重载(),使用起来像函数 */
+```
+
 
 
 ### 8.关于std::function和std::bind
@@ -463,6 +642,7 @@ int main(){
 	printf("*p3: %d\n", *p3);
 }
 ```
+
 
 
  

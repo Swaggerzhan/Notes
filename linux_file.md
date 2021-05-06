@@ -31,7 +31,7 @@ __int open(const char* path, mode_t mode);__
 * O_SYNC __使每次write等待物理I/O操作完成__
 * O_TRUNC (..)
 
-以上是mode_t的参数，其中(O_RDWD | O_CREAT | O_TRUNC)三个参数一起传入可以实现和`creat()`函数一样的效果，`creat()`函数是早期unix系统的遗留问题额外添加，现在可以由`open()`函数直接代替。
+以上是mode_t的参数，其中(O_RDWD | O_CREAT | O_TRUNC)三个参数一起传入可以实现和`creat()`函数一样的效果，`creat()`函数是早期unix系统的遗留问题额外添加，现在可以由`open()`函数直接代替。对于打开文件错误等其他原因会使linux设置errno变量，对应某些错误的原因， __其中需要注意的是定义`errno`变量的头文件为`<errno.h>`而定义打印字符错误提示符的函数`char *strerror(int errno);`函数是定义在头文件`<string.h>`中的__ 。
 
 ### 2. close函数
 __int close(int fd);__
