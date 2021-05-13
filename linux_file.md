@@ -318,4 +318,3 @@ content: this is root's file! no one can see this except root!!
 ```
 __可以看到，`a.out`是一个swagger的进程，但是是以`root`的权限来运行的。由此，我们成功读取到了内容__ 。
 
-

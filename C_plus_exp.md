@@ -590,6 +590,40 @@ auto new_function = std::bind(&Test::add, &t, 10, 20);
 ```
 必须将其函数指针传入，并且在第二个参数中还需要指定所在的对象！。
 
+std::bind更多的使用途径是用在回调函数的参数提前绑定。
+```C++
+class Work;
+
+class Timer{
+public:
+    typedef std::function<void()> Functor;
+    Functor cb_;
+    Timer(Functor cb):cb_(std::move(cb)){}
+    void run() const
+    {
+        cb_();
+    }
+};
+
+class Work{
+public:
+    int fd_;
+    Work(int fd):fd_(fd){}
+    Timer* timer;
+    void close(int fd){
+        std::cout << "fd: " << fd << " closed" << std::endl;
+    }
+};
+
+int main(){
+    Work work(10);
+    Timer timer(std::bind(&Work::close, work, 10));
+    timer.run();
+}
+```
+
+如上用法，`Timer`类中有一个回调函数`cb_`， __这个回调函数并不需要什么参数，因为使用者可以通过`std::bind`提前将参数绑定好__ ，然后将这个`std::bind`的返回对象，也就是一个仿函数传入，由于这个仿函数是这样的`std::bind(&Work::close, work, 10)`，它是一个右值，我们可以使用`std::move`来延长其寿命，并且最终将其赋予`cb_`。
+
 
 ### 9. 智能指针！
 

@@ -1,346 +1,831 @@
-<!DOCTYPE html>
-<head>
-    <meta charset="UTF-8">
-</head>
+<!doctype html>
 <html>
-    <body>
-        
-        <ul>
-<li><p><a href="#linux-file">linux-file</a></p>
-<ul>
-<li><a href="#%E4%B8%80%E5%87%BD%E6%95%B0">一、函数</a></li>
-<li><a href="#1-open%E5%87%BD%E6%95%B0">1. open函数</a></li>
-<li><a href="#2-close%E5%87%BD%E6%95%B0">2. close函数</a></li>
-<li><a href="#3-lseek%E5%87%BD%E6%95%B0">3. lseek函数</a></li>
-<li><a href="#4-read%E5%87%BD%E6%95%B0">4. read函数</a></li>
-<li><a href="#5-write%E5%87%BD%E6%95%B0">5. write函数</a></li>
-<li><a href="#6-pread%E5%87%BD%E6%95%B0%E4%B8%8Epwrite%E5%87%BD%E6%95%B0">6. pread函数与pwrite函数</a></li>
-<li><a href="#7-dup%E5%87%BD%E6%95%B0%E5%92%8Cdup2%E5%87%BD%E6%95%B0">7. dup函数和dup2函数</a></li>
-<li><a href="#8readv%E5%92%8Cwritev%E5%87%BD%E6%95%B0">8.readv和writev函数</a></li>
-<li><a href="#9-%E5%82%A8%E5%AD%98%E6%98%A0%E5%B0%84io%E5%87%BD%E6%95%B0mmap">9. 储存映射IO函数mmap</a></li>
-<li><a href="#%E4%BA%8C%E6%96%87%E4%BB%B6%E5%85%B1%E4%BA%AB">二、文件共享</a></li>
-<li><a href="#1-%E7%BB%B4%E6%8A%A4%E6%96%87%E4%BB%B6%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84">1. 维护文件的数据结构</a></li>
-<li><a href="#%E4%B8%89%E6%96%87%E4%BB%B6%E6%9D%83%E9%99%90">三、文件权限</a></li>
-<li><a href="#1%E6%96%87%E4%BB%B6%E7%B1%BB%E5%9E%8B">1.文件类型</a></li>
-<li><a href="#2-%E6%9D%83%E9%99%90">2. 权限</a>
-# linux-file<br/>
-## 一、函数<br/>
-### 1. open函数
-<strong>int open(const char* path, mode_t mode);</strong></li>
-</ul></li>
-<li><p>O_RDONLY <strong>只读打开</strong>  RD--&gt;read.  ONLY</p></li>
-<li><p>O_WRONLY <strong>只写打开</strong>  WD--&gt;write. ONLY</p></li>
-<li><p>O_RDWD <strong>读写打开</strong>    WD--&gt;write. RD--&gt;read</p></li>
-<li><p>O_EXEC <strong>只执行打开</strong></p></li>
-<li><p>O_SEARCH <strong>只搜索打开</strong></p></li>
-<li><p>O_APPEND <strong>追加，写的时候追加到文件尾部</strong></p></li>
-<li><p>O_CREAT <strong>文件不存在则创建(需要添加访问权限..)</strong></p></li>
-<li><p>O_NONBLOCK <strong>将文件描述符设置为非堵塞型</strong></p></li>
-<li><p>O_SYNC <strong>使每次write等待物理I/O操作完成</strong></p></li>
-<li><p>O_TRUNC (..)</p></li>
-</ul>
+<head>
+<meta charset='UTF-8'><meta name='viewport' content='width=device-width initial-scale=1'>
 
-<p>以上是mode_t的参数，其中(O_RDWD | O_CREAT | O_TRUNC)三个参数一起传入可以实现和<code>creat()</code>函数一样的效果，<code>creat()</code>函数是早期unix系统的遗留问题额外添加，现在可以由<code>open()</code>函数直接代替。对于打开文件错误等其他原因会使linux设置errno变量，对应某些错误的原因， <strong>其中需要注意的是定义<code>errno</code>变量的头文件为<code>&lt;errno.h&gt;</code>而定义打印字符错误提示符的函数<code>char *strerror(int errno);</code>函数是定义在头文件<code>&lt;string.h&gt;</code>中的</strong> 。</p>
-
-<h3 id="toc_0">2. close函数</h3>
-
-<p><strong>int close(int fd);</strong><br/>
-关闭一个文件描述符号，同时也会关闭设置在这个文件上的所有<code>记录锁</code>。</p>
-
-<h3 id="toc_1">3. lseek函数</h3>
-
-<p><strong>off_t lseek(int fd, off_t offset, int whence);</strong></p>
-
-<ul>
-<li>SEEK_CUR <strong>返回当前文件位置，如果offset有数据则将偏移量增加到对应的fd中</strong></li>
-<li>SEEK_SET <strong>将文件偏移量设置为offset</strong></li>
-<li>SEEK_END <strong>返回文件长度，如果offset有数据则将文件长度增加offset</strong></li>
-</ul>
-
-<blockquote>
-<p>其中off_t的原型是 int64_t 也就是 long long型</p>
-</blockquote>
-
-<p>用来查看文件描述符fd当前读取到的位置偏移量，其中实现方法使用的是fd所对应的结构体(之后解释)。使用对象是网络套接字和标准输入输出描述符则会出现报错。</p>
-
-<h3 id="toc_2">4. read函数</h3>
-
-<p><strong>ssize_t read(int fd, void* buf, size_t nbytes);</strong></p>
-
-<p>read成功，返回读到的字节数。如果已经达到文件尾部，则返回0。<br/>
-如果 <code>size_t nbytes</code>所给定的数值过大，超过文件描述符中数据的长度，则直接全部读取，并且返回<code>fd中所有的数据的 长度</code>，<code>下一次读取时返回 0</code>。<br/>
-如果读取的是<code>管道、网络套接字或者标准输入与标准输出</code>且其中没有数据，则会出现 <strong>堵塞</strong>，将描述符设置为 <strong>NONBLOCK</strong>则会直接返回<code>-1并且设置errno</code>。read函数不对<code>buf</code>参数负责，如果 <strong>buf空间小于nbytes和fd中数据长度,</strong>  <strong>空间大小不够的buf持续读入可能会出现<code>越界</code>情况。</strong></p>
-
-<h3 id="toc_3">5. write函数</h3>
-
-<p><strong>ssize_t write(int fd, void* buf, size_t nbytes);</strong></p>
-
-<p>write函数则和read函数返回值相同，通过fd所绑定的结构体中所记录的当前文件偏移量写入数据。其中<code>O_APPEND</code>方式打开会影响文件状态标志(细节见文件的数据结构)。如果<code>size_t nbytes</code>的数值超过buf，那么只会写入buf中的所有数据并且返回buf的长度。出错时候设置<code>errno</code>。</p>
-
-<h3 id="toc_4">6. pread函数与pwrite函数</h3>
-
-<p><strong>ssize_t pread(int fd, void* buf, size_t nbytes, off_t offset);</strong><br/>
-<strong>ssize_t pwrite(int fd, const void* buf, size_t nbytes, off_t offset);</strong></p>
-
-<p>调用pread方法相当于调用了lseek后调用read，与自己手动调用这两个函数的区别：</p>
-
-<ul>
-<li>pread运行时不可中断其定位和读操作。</li>
-<li>不更新当前文件偏移量。</li>
-</ul>
-
-<h3 id="toc_5">7. dup函数和dup2函数</h3>
-
-<p><strong>int dup(int fd);</strong><br/>
-<strong>int dup2(int fd, int fd2);</strong></p>
-
-<p><strong>dup和dup2函数是干什么的用一张图片就可以清楚解释：</strong><br/>
-<img src="./linux_file_pic/linux_file3.png" alt=""/><br/>
-返回一个新的文件描述符，它所指向的文件和参数fd指向的文件相同。</p>
-
-<p>dup函数返回一个新文件描述符，是当前文件描述符中最小值。对于dup2，可以使用fd2参数来指定新的描述符的值，如果fd2已经打开，就先关闭fd2。如果fd2等于fd，则直接返回fd2。</p>
-
-<h3 id="toc_6">8.readv和writev函数</h3>
-
-<p>readv和writev即散布读和散布写，可以在一次调用读写多个缓冲区。使用这种方案比多次调用read或者write函数效率要高，毕竟谁也不想调用相同的系统调用多次，徒增切换花销。</p>
-
-<pre><code class="language-cpp">#include &lt;sys/uio.h&gt;
-
-ssize_t readv(int fd, const iovec *iov, int iovcnt);
-ssize_t writev(int fd, const iovec* iov, int iovcnt);
-// iov是一个指向iovec结构体的数组，iovcnt表示数组个数
-
-struct iovec{
-    void *iov_base; /* 起始地址 */
-    size_t iov_len;/* 长度 */
-};
-</code></pre>
-
-<h3 id="toc_7">9. 储存映射IO函数mmap</h3>
-
-<p>储存映射能将磁盘上的一个文件直接映射到内存中的一个缓冲区上，当从缓存区中读写信息就等同于在文件中读写信息，即在不实用read和write的情况下执行IO操作。</p>
-
-<pre><code class="language-cpp">#include &lt;sys/mman.h&gt;
-/* 返回值为映射区指向的地址 */
-void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
-/* 改变映射区的权限 */
-int mprotect(void *addr, size_t len, int prot);
-/* 关闭映射区 */
-int munmap(void* addr, size_t len);
-</code></pre>
-
-<p>addr参数指向一个地址，表示将磁盘数据映射到这个地址上，建议设置为0，由操作系统接管。<br/>
-prot表示映射地区的保护要求，可按位打开</p>
-
-<pre><code class="language-cpp">PROT_READ // 映射区可读
-PROT_WRITE // 映射区可写
-PROT_EXEC // 映射区可执行
-PROT_NONE // 映射区不可访问
-</code></pre>
-
-<p>flag字段可以用来设置映射区的属性等</p>
-
-<pre><code class="language-cpp">MAP_FIXED // 必返回指定的addr地址，不建议
-MAP_SHARED // 对于映射区的操作等同于对文件的操作
-MAP_PRIVATE // 对于缓存的操作不改变文件本身 调试可用
-</code></pre>
-
-<p>fd为指向的文件，off表示文件偏移量<br/>
-最后，fork的子进程是可以继承映射区的，但是exec后就不共享了。</p>
-
-<h2 id="toc_8">二、文件共享</h2>
-
-<h3 id="toc_9">1. 维护文件的数据结构</h3>
-
-<p>每一个进程中都存在一个 <strong>进程表项</strong>，其中存有<code>fd</code>所对应的<code>文件指针</code>，<code>文件指针</code>又指向 <strong>文件表项</strong>，文件表项中储存着当前<code>文件状态标志</code>，<code>当前文件偏移量</code>(只针对打开此文件的进程，每一个进程维护着自己的文件偏移量)，以及<code>v节点指针</code>(linux中不使用vnode)。<br/>
-<img src="./linux_file_pic/linux_file1.png" alt=""/></p>
-
-<p>如果两个独立的进程打开了相同的文件：<br/>
-<img src="./linux_file_pic/linux_file2.png" alt=""/></p>
-
-<p>使用<code>O_APPEND</code>打开方式的时候， <strong>每次write往文件中写入都会实时通过文件v节点指针(i节点指针)获取文件长度</strong>，并且加上偏移量进行写入，这种方法和使用lseek函数实现的有差别。</p>
-
-<p>例如有两个进程A与B，A和B都打开了相同的文件(没有使用<code>O_APPEND</code>标志位)，A和B的进程中都有着自己独立的 <strong>文件表项</strong>，有着自己的 <strong>文件偏移量</strong>，文件初始大小1500， <strong>之后A使用lseek获取了文件大小</strong>， <strong>想往文件尾部写入100字节</strong>，但是巧合的是这时候内核<code>切换</code>了进程。进程B开始运行，进程B进行和A一样的操作， <strong>lseek文件得到1500</strong>，写入100字节，之后文件长度 <strong>更新到1600</strong>。内核再次切换到进程A运行， <strong>从1500处开始写入</strong>，进而发生错误。 <strong>如果该用O_APPEND方法就可以避免此问题，因为O_APPEND标志位是偏移量+文件长度的方式，可以实时获取真正的文件长度，但是这种方法也存在问题</strong>。另一种解决方式正是<code>原子操作</code>。</p>
-
-<h2 id="toc_10">三、文件权限</h2>
-
-<h3 id="toc_11">1.文件类型</h3>
-
-<p>在理解文件权限之前，我们先了解一下文件权限是怎么存储在linux中的。linux提供许多API来获取文件信息的函数</p>
-
-<pre><code class="language-c">#include &lt;sys/stat.h&gt;
-
-int stat(const char* pathname, struct stat* buf);
-int fstat(int fd, struct stat *buf);
-int lstat(const char* pathname, struct stat* buf);
-int fstatat(int fd, const char* pathname, struct stat* buf, int flag);
-
-// 成功return 0，出错return -1
-</code></pre>
-
-<p>对于返回的<code>结构体stat</code>的定义如下</p>
-
-<pre><code class="language-c">struct stat{
-    mode_t          st_mode; /* 文件类型和权限都存储在此 */
-    ino_t           st_ino; /* i-node节点个数 */
-    dev_t           st_dev;
-    dev_t           st_rdev;
-    nlink_t         st_nlink;
-    uid_t           st_uid; /* 所有者ID */
-    gid_t           st_gid; /* 所有组ID */
-    off_t           st_size; /* 文件长度，主要用于普通文件 */
-    struct timespec st_atime; /* 最后访问时间 */
-    struct timespec st_mtime; /* 最后修改时间 */
-    struct timespec st_ctime; /* 最后改变文件状态时间 */
-    blksize_t       st_blksize;
-    blkcnt_t        st_blocks; /* 磁盘中分配了多少个块 */
-};
-</code></pre>
-
-<p>对于其中比较常用的几个字段，如st_mode可以使用Linux所定义的宏来进行访问。</p>
-
-<pre><code class="language-c">S_ISREG() /* 是否为普通文件 */
-S_ISDIR() /* 是否为目录文件 */
-S_ISCHR() /* 字符特殊文件 */
-S_ISBLK() /* 块特殊文件 */
-S_ISFIFO() /* 管道符文件 */
-S_ISLNK() /* 符号链接 */
-S_ISSOCK() /* 是否为套接字 */
-</code></pre>
-
-<h3 id="toc_12">2. 权限</h3>
-
-<p>Linux中有许多关于ID概念</p>
-
-<pre><code class="language-text">* 实际用户ID
-* 实际组ID
-* 有效用户ID
-* 有效组ID
-* 附属组ID
-* 保存的设置用户ID
-* 保存的设置组ID
-</code></pre>
-
-<p>对于stat结构体中存在的两个字段<code>st_uid</code>和<code>st_gid</code>分别对应 <strong>文件的所有者</strong> 和 <strong>文件的所有者组</strong> 。 当我们以<code>swagger</code>用户登陆时候，我们所登陆的那个shell的ID也就是<code>swagger</code>用户的ID，称为 <strong>实际用户ID和实际用户组ID</strong> 。<br/>
-我们可以通俗的暂时理解 <strong>实际用户ID和实际用户组ID是一个<code>操作者的权限</code></strong> ，而 <strong>有效用户ID和有效用户组ID是一个<code>运行起来的进程的权限</code></strong> ，带着这个暂时的理解，我们来看一个例子。<br/>
-当一个可执行文件执行的时候，这个文件所执行后生成的进程会有一个 <strong>有效用户ID和有效用户组ID</strong> ，它们通常就是这个文件(可执行文件)的 <strong>执行者的实际用户ID</strong> 。当然这个所谓的 <strong>执行者用户ID到底有没有权限执行这个文件我们先不讨论</strong> ，假设<code>swagger</code>用户可以执行一个文件，那么那个文件执行后生成的进程的 <strong>有效用户ID和有效用户组ID</strong> 就是<code>swagger</code>用户的 <strong>实际用户ID和实际用户组ID</strong> 。<br/>
-我们先创建如下程序：</p>
-
-<pre><code class="language-c">int main(){
-    printf(&quot;uid:  %d\n&quot;, getuid());
-    printf(&quot;gid:  %d\n&quot;, getgid());
-    printf(&quot;euid: %d\n&quot;, geteuid());
-    printf(&quot;egid: %d\n&quot;, getegid());
+<link href='file:///Users/swagger/Library/Application Support/abnerworks.Typora/themes/vue/fonts.css' rel='stylesheet' type='text/css' /><style type='text/css'>html {overflow-x: initial !important;}:root { --bg-color: #ffffff; --text-color: #333333; --select-text-bg-color: #B5D6FC; --select-text-font-color: auto; --monospace: "Lucida Console",Consolas,"Courier",monospace; --title-bar-height: 20px; }
+.mac-os-11 { --title-bar-height: 28px; }
+html { font-size: 14px; background-color: var(--bg-color); color: var(--text-color); font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+body { margin: 0px; padding: 0px; height: auto; bottom: 0px; top: 0px; left: 0px; right: 0px; font-size: 1rem; line-height: 1.42857143; overflow-x: hidden; background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; tab-size: 4; background-position: inherit inherit; background-repeat: inherit inherit; }
+iframe { margin: auto; }
+a.url { word-break: break-all; }
+a:active, a:hover { outline: 0px; }
+.in-text-selection, ::selection { text-shadow: none; background: var(--select-text-bg-color); color: var(--select-text-font-color); }
+#write { margin: 0px auto; height: auto; width: inherit; word-break: normal; word-wrap: break-word; position: relative; white-space: normal; overflow-x: visible; padding-top: 36px; }
+#write.first-line-indent p { text-indent: 2em; }
+#write.first-line-indent li p, #write.first-line-indent p * { text-indent: 0px; }
+#write.first-line-indent li { margin-left: 2em; }
+.for-image #write { padding-left: 8px; padding-right: 8px; }
+body.typora-export { padding-left: 30px; padding-right: 30px; }
+.typora-export .footnote-line, .typora-export li, .typora-export p { white-space: pre-wrap; }
+.typora-export .task-list-item input { pointer-events: none; }
+@media screen and (max-width: 500px) { 
+  body.typora-export { padding-left: 0px; padding-right: 0px; }
+  #write { padding-left: 20px; padding-right: 20px; }
+  .CodeMirror-sizer { margin-left: 0px !important; }
+  .CodeMirror-gutters { display: none !important; }
 }
-</code></pre>
+#write li > figure:last-child { margin-bottom: 0.5rem; }
+#write ol, #write ul { position: relative; }
+img { max-width: 100%; vertical-align: middle; }
+button, input, select, textarea { color: inherit; font-family: inherit; font-size: inherit; font-style: inherit; font-variant-caps: inherit; font-weight: inherit; font-stretch: inherit; line-height: inherit; }
+input[type="checkbox"], input[type="radio"] { line-height: normal; padding: 0px; }
+*, ::after, ::before { box-sizing: border-box; }
+#write h1, #write h2, #write h3, #write h4, #write h5, #write h6, #write p, #write pre { width: inherit; }
+#write h1, #write h2, #write h3, #write h4, #write h5, #write h6, #write p { position: relative; }
+p { line-height: inherit; }
+h1, h2, h3, h4, h5, h6 { break-after: avoid-page; break-inside: avoid; orphans: 4; }
+p { orphans: 4; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.8rem; }
+h3 { font-size: 1.6rem; }
+h4 { font-size: 1.4rem; }
+h5 { font-size: 1.2rem; }
+h6 { font-size: 1rem; }
+.md-math-block, .md-rawblock, h1, h2, h3, h4, h5, h6, p { margin-top: 1rem; margin-bottom: 1rem; }
+.hidden { display: none; }
+.md-blockmeta { color: rgb(204, 204, 204); font-weight: 700; font-style: italic; }
+a { cursor: pointer; }
+sup.md-footnote { padding: 2px 4px; background-color: rgba(238, 238, 238, 0.701961); color: rgb(85, 85, 85); border-top-left-radius: 4px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; border-bottom-left-radius: 4px; cursor: pointer; }
+sup.md-footnote a, sup.md-footnote a:hover { color: inherit; text-transform: inherit; text-decoration: inherit; }
+#write input[type="checkbox"] { cursor: pointer; width: inherit; height: inherit; }
+figure { overflow-x: auto; margin: 1.2em 0px; max-width: calc(100% + 16px); padding: 0px; }
+figure > table { margin: 0px; }
+tr { break-inside: avoid; break-after: auto; }
+thead { display: table-header-group; }
+table { border-collapse: collapse; border-spacing: 0px; width: 100%; overflow: auto; break-inside: auto; text-align: left; }
+table.md-table td { min-width: 32px; }
+.CodeMirror-gutters { border-right-width: 0px; background-color: inherit; }
+.CodeMirror-linenumber { }
+.CodeMirror { text-align: left; }
+.CodeMirror-placeholder { opacity: 0.3; }
+.CodeMirror pre { padding: 0px 4px; }
+.CodeMirror-lines { padding: 0px; }
+div.hr:focus { cursor: none; }
+#write pre { white-space: pre-wrap; }
+#write.fences-no-line-wrapping pre { white-space: pre; }
+#write pre.ty-contain-cm { white-space: normal; }
+.CodeMirror-gutters { margin-right: 4px; }
+.md-fences { font-size: 0.9rem; display: block; break-inside: avoid; text-align: left; overflow: visible; white-space: pre; background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; position: relative !important; background-position: inherit inherit; background-repeat: inherit inherit; }
+.md-fences-adv-panel { width: 100%; margin-top: 10px; text-align: center; padding-top: 0px; padding-bottom: 8px; overflow-x: auto; }
+#write .md-fences.mock-cm { white-space: pre-wrap; }
+.md-fences.md-fences-with-lineno { padding-left: 0px; }
+#write.fences-no-line-wrapping .md-fences.mock-cm { white-space: pre; overflow-x: auto; }
+.md-fences.mock-cm.md-fences-with-lineno { padding-left: 8px; }
+.CodeMirror-line, twitterwidget { break-inside: avoid; }
+.footnotes { opacity: 0.8; font-size: 0.9rem; margin-top: 1em; margin-bottom: 1em; }
+.footnotes + .footnotes { margin-top: 0px; }
+.md-reset { margin: 0px; padding: 0px; border: 0px; outline: 0px; vertical-align: top; text-decoration: none; text-shadow: none; float: none; position: static; width: auto; height: auto; white-space: nowrap; cursor: inherit; line-height: normal; font-weight: 400; text-align: left; box-sizing: content-box; direction: ltr; background-position: 0px 0px; background-repeat: initial initial; }
+li div { padding-top: 0px; }
+blockquote { margin: 1rem 0px; }
+li .mathjax-block, li p { margin: 0.5rem 0px; }
+li blockquote { margin: 1rem 0px; }
+li { margin: 0px; position: relative; }
+blockquote > :last-child { margin-bottom: 0px; }
+blockquote > :first-child, li > :first-child { margin-top: 0px; }
+.footnotes-area { color: rgb(136, 136, 136); margin-top: 0.714rem; padding-bottom: 0.143rem; white-space: normal; }
+#write .footnote-line { white-space: pre-wrap; }
+@media print { 
+  body, html { border: 1px solid transparent; height: 99%; break-after: avoid-page; break-before: avoid-page; font-variant-ligatures: no-common-ligatures; }
+  #write { margin-top: 0px; padding-top: 0px; border-color: transparent !important; }
+  .typora-export * { -webkit-print-color-adjust: exact; }
+  .typora-export #write { break-after: avoid-page; }
+  .typora-export #write::after { height: 0px; }
+  .is-mac table { break-inside: avoid; }
+  .typora-export-show-outline .typora-export-sidebar { display: none; }
+}
+.footnote-line { margin-top: 0.714em; font-size: 0.7em; }
+a img, img a { cursor: pointer; }
+pre.md-meta-block { font-size: 0.8rem; min-height: 0.8rem; white-space: pre-wrap; background-color: rgb(204, 204, 204); display: block; overflow-x: hidden; background-position: initial initial; background-repeat: initial initial; }
+p > .md-image:only-child:not(.md-img-error) img, p > img:only-child { display: block; margin: auto; }
+#write.first-line-indent p > .md-image:only-child:not(.md-img-error) img { left: -2em; position: relative; }
+p > .md-image:only-child { display: inline-block; width: 100%; }
+#write .MathJax_Display { margin: 0.8em 0px 0px; }
+.md-math-block { width: 100%; }
+.md-math-block:not(:empty)::after { display: none; }
+.MathJax_ref { fill: currentcolor; }
+[contenteditable="true"]:active, [contenteditable="true"]:focus, [contenteditable="false"]:active, [contenteditable="false"]:focus { outline: 0px; box-shadow: none; }
+.md-task-list-item { position: relative; list-style-type: none; }
+.task-list-item.md-task-list-item { padding-left: 0px; }
+.md-task-list-item > input { position: absolute; top: 0px; left: 0px; margin-left: -1.2em; margin-top: calc(1em - 10px); border: none; }
+.math { font-size: 1rem; }
+.md-toc { min-height: 3.58rem; position: relative; font-size: 0.9rem; border-top-left-radius: 10px; border-top-right-radius: 10px; border-bottom-right-radius: 10px; border-bottom-left-radius: 10px; }
+.md-toc-content { position: relative; margin-left: 0px; }
+.md-toc-content::after, .md-toc::after { display: none; }
+.md-toc-item { display: block; color: rgb(65, 131, 196); }
+.md-toc-item a { text-decoration: none; }
+.md-toc-inner:hover { text-decoration: underline; }
+.md-toc-inner { display: inline-block; cursor: pointer; }
+.md-toc-h1 .md-toc-inner { margin-left: 0px; font-weight: 700; }
+.md-toc-h2 .md-toc-inner { margin-left: 2em; }
+.md-toc-h3 .md-toc-inner { margin-left: 4em; }
+.md-toc-h4 .md-toc-inner { margin-left: 6em; }
+.md-toc-h5 .md-toc-inner { margin-left: 8em; }
+.md-toc-h6 .md-toc-inner { margin-left: 10em; }
+@media screen and (max-width: 48em) { 
+  .md-toc-h3 .md-toc-inner { margin-left: 3.5em; }
+  .md-toc-h4 .md-toc-inner { margin-left: 5em; }
+  .md-toc-h5 .md-toc-inner { margin-left: 6.5em; }
+  .md-toc-h6 .md-toc-inner { margin-left: 8em; }
+}
+a.md-toc-inner { font-size: inherit; font-style: inherit; font-weight: inherit; line-height: inherit; }
+.footnote-line a:not(.reversefootnote) { color: inherit; }
+.md-attr { display: none; }
+.md-fn-count::after { content: "."; }
+code, pre, samp, tt { font-family: var(--monospace); }
+kbd { margin: 0px 0.1em; padding: 0.1em 0.6em; font-size: 0.8em; color: rgb(36, 39, 41); background-color: rgb(255, 255, 255); border: 1px solid rgb(173, 179, 185); border-top-left-radius: 3px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; border-bottom-left-radius: 3px; box-shadow: rgba(12, 13, 14, 0.2) 0px 1px 0px, rgb(255, 255, 255) 0px 0px 0px 2px inset; white-space: nowrap; vertical-align: middle; background-position: initial initial; background-repeat: initial initial; }
+.md-comment { color: rgb(162, 127, 3); opacity: 0.8; font-family: var(--monospace); }
+code { text-align: left; }
+a.md-print-anchor { white-space: pre !important; border: none !important; display: inline-block !important; position: absolute !important; width: 1px !important; right: 0px !important; outline: 0px !important; text-shadow: initial !important; background-position: 0px 0px !important; background-repeat: initial initial !important; }
+.md-inline-math .MathJax_SVG .noError { display: none !important; }
+.html-for-mac .inline-math-svg .MathJax_SVG { vertical-align: 0.2px; }
+.md-fences-math .MathJax_SVG_Display, .md-math-block .MathJax_SVG_Display { text-align: center; margin: 0px; position: relative; text-indent: 0px; max-width: none; max-height: none; min-height: 0px; min-width: 100%; width: auto; overflow-y: visible; display: block !important; }
+.MathJax_SVG_Display, .md-inline-math .MathJax_SVG_Display { width: auto; margin: inherit; display: inline-block !important; }
+.MathJax_SVG .MJX-monospace { font-family: var(--monospace); }
+.MathJax_SVG .MJX-sans-serif { font-family: sans-serif; }
+.MathJax_SVG { display: inline; font-style: normal; font-weight: 400; line-height: normal; text-indent: 0px; text-align: left; text-transform: none; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; direction: ltr; max-width: none; max-height: none; min-width: 0px; min-height: 0px; border: 0px; padding: 0px; margin: 0px; }
+.MathJax_SVG * { transition: none; }
+.MathJax_SVG_Display svg { vertical-align: middle !important; margin-bottom: 0px !important; margin-top: 0px !important; }
+.os-windows.monocolor-emoji .md-emoji { font-family: "Segoe UI Symbol", sans-serif; }
+.md-diagram-panel > svg { max-width: 100%; }
+[lang="flow"] svg, [lang="mermaid"] svg { max-width: 100%; height: auto; }
+[lang="mermaid"] .node text { font-size: 1rem; }
+table tr th { border-bottom-width: 0px; }
+video { max-width: 100%; display: block; margin: 0px auto; }
+iframe { max-width: 100%; width: 100%; border: none; }
+.highlight td, .highlight tr { border: 0px; }
+mark { background-color: rgb(255, 255, 0); color: rgb(0, 0, 0); background-position: initial initial; background-repeat: initial initial; }
+.md-html-inline .md-plain, .md-html-inline strong, mark .md-inline-math, mark strong { color: inherit; }
+.md-expand mark .md-meta { opacity: 0.3 !important; }
+mark .md-meta { color: rgb(0, 0, 0); }
+@media print { 
+  .typora-export h1, .typora-export h2, .typora-export h3, .typora-export h4, .typora-export h5, .typora-export h6 { break-inside: avoid; }
+}
+.md-diagram-panel .messageText { stroke: none !important; }
+.md-diagram-panel .start-state { fill: var(--node-fill); }
+.md-diagram-panel .edgeLabel rect { opacity: 1 !important; }
+.md-require-zoom-fix foreignObject { font-size: var(--mermaid-font-zoom); }
+.md-fences.md-fences-math { font-size: 1em; }
+.md-fences-math .MathJax_SVG_Display { margin-top: 8px; cursor: default; }
+.md-fences-advanced:not(.md-focus) { padding: 0px; white-space: nowrap; border: 0px; }
+.md-fences-advanced:not(.md-focus) { background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; background-position: inherit inherit; background-repeat: inherit inherit; }
+.typora-export-show-outline .typora-export-content { max-width: 1440px; margin: auto; display: flex; flex-direction: row; }
+.typora-export-sidebar { width: 300px; font-size: 0.8rem; margin-top: 80px; margin-right: 18px; }
+.typora-export-show-outline #write { --webkit-flex: 2; flex: 2 1 0%; }
+.typora-export-sidebar .outline-content { position: fixed; top: 0px; max-height: 100%; overflow-y: auto; padding-bottom: 30px; padding-top: 60px; width: 300px; overflow-x: hidden; }
+@media screen and (max-width: 1024px) { 
+  .typora-export-sidebar, .typora-export-sidebar .outline-content { width: 240px; }
+}
+@media screen and (max-width: 800px) { 
+  .typora-export-sidebar { display: none; }
+}
+.outline-content li, .outline-content ul { margin-left: 0px; margin-right: 0px; padding-left: 0px; padding-right: 0px; list-style: none; }
+.outline-content ul { margin-top: 0px; margin-bottom: 0px; }
+.outline-content strong { font-weight: 400; }
+.outline-expander { width: 1rem; height: 1.428571429rem; position: relative; display: table-cell; vertical-align: middle; cursor: pointer; padding-left: 4px; }
+.outline-expander::before { content: ''; position: relative; font-family: Ionicons; display: inline-block; font-size: 8px; vertical-align: middle; }
+.outline-item { padding-top: 3px; padding-bottom: 3px; cursor: pointer; }
+.outline-expander:hover::before { content: ''; }
+.outline-h1 > .outline-item { padding-left: 0px; }
+.outline-h2 > .outline-item { padding-left: 1em; }
+.outline-h3 > .outline-item { padding-left: 2em; }
+.outline-h4 > .outline-item { padding-left: 3em; }
+.outline-h5 > .outline-item { padding-left: 4em; }
+.outline-h6 > .outline-item { padding-left: 5em; }
+.outline-label { cursor: pointer; display: table-cell; vertical-align: middle; text-decoration: none; color: inherit; }
+.outline-label:hover { text-decoration: underline; }
+.outline-item:hover { border-color: rgb(245, 245, 245); background-color: var(--item-hover-bg-color); }
+.outline-item:hover { margin-left: -28px; margin-right: -28px; border-left-width: 28px; border-left-style: solid; border-left-color: transparent; border-right-width: 28px; border-right-style: solid; border-right-color: transparent; }
+.outline-item-single .outline-expander::before, .outline-item-single .outline-expander:hover::before { display: none; }
+.outline-item-open > .outline-item > .outline-expander::before { content: ''; }
+.outline-children { display: none; }
+.info-panel-tab-wrapper { display: none; }
+.outline-item-open > .outline-children { display: block; }
+.typora-export .outline-item { padding-top: 1px; padding-bottom: 1px; }
+.typora-export .outline-item:hover { margin-right: -8px; border-right-width: 8px; border-right-style: solid; border-right-color: transparent; }
+.typora-export .outline-expander::before { content: "+"; font-family: inherit; top: -1px; }
+.typora-export .outline-expander:hover::before, .typora-export .outline-item-open > .outline-item > .outline-expander::before { content: '−'; }
+.typora-export-collapse-outline .outline-children { display: none; }
+.typora-export-collapse-outline .outline-item-open > .outline-children, .typora-export-no-collapse-outline .outline-children { display: block; }
+.typora-export-no-collapse-outline .outline-expander::before { content: "" !important; }
+.typora-export-show-outline .outline-item-active > .outline-item .outline-label { font-weight: 700; }
 
-<p>我们使用root用户创建以上程序，并且编译得到<code>a.out</code>文件，使用<code>ls -l</code>查看权限如下:</p>
 
-<pre><code class="language-shell">-rwxr-xr-x 1 root root 8712 Apr 27 16:02 a.out
-</code></pre>
+.CodeMirror { height: auto; }
+.CodeMirror.cm-s-inner { background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; background-position: inherit inherit; background-repeat: inherit inherit; }
+.CodeMirror-scroll { overflow-y: hidden; overflow-x: auto; z-index: 3; }
+.CodeMirror-gutter-filler, .CodeMirror-scrollbar-filler { background-color: rgb(255, 255, 255); }
+.CodeMirror-gutters { border-right-width: 1px; border-right-style: solid; border-right-color: rgb(221, 221, 221); background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; white-space: nowrap; background-position: inherit inherit; background-repeat: inherit inherit; }
+.CodeMirror-linenumber { padding: 0px 3px 0px 5px; text-align: right; color: rgb(153, 153, 153); }
+.cm-s-inner .cm-keyword { color: rgb(119, 0, 136); }
+.cm-s-inner .cm-atom, .cm-s-inner.cm-atom { color: rgb(34, 17, 153); }
+.cm-s-inner .cm-number { color: rgb(17, 102, 68); }
+.cm-s-inner .cm-def { color: rgb(0, 0, 255); }
+.cm-s-inner .cm-variable { color: rgb(0, 0, 0); }
+.cm-s-inner .cm-variable-2 { color: rgb(0, 85, 170); }
+.cm-s-inner .cm-variable-3 { color: rgb(0, 136, 85); }
+.cm-s-inner .cm-string { color: rgb(170, 17, 17); }
+.cm-s-inner .cm-property { color: rgb(0, 0, 0); }
+.cm-s-inner .cm-operator { color: rgb(152, 26, 26); }
+.cm-s-inner .cm-comment, .cm-s-inner.cm-comment { color: rgb(170, 85, 0); }
+.cm-s-inner .cm-string-2 { color: rgb(255, 85, 0); }
+.cm-s-inner .cm-meta { color: rgb(85, 85, 85); }
+.cm-s-inner .cm-qualifier { color: rgb(85, 85, 85); }
+.cm-s-inner .cm-builtin { color: rgb(51, 0, 170); }
+.cm-s-inner .cm-bracket { color: rgb(153, 153, 119); }
+.cm-s-inner .cm-tag { color: rgb(17, 119, 0); }
+.cm-s-inner .cm-attribute { color: rgb(0, 0, 204); }
+.cm-s-inner .cm-header, .cm-s-inner.cm-header { color: rgb(0, 0, 255); }
+.cm-s-inner .cm-quote, .cm-s-inner.cm-quote { color: rgb(0, 153, 0); }
+.cm-s-inner .cm-hr, .cm-s-inner.cm-hr { color: rgb(153, 153, 153); }
+.cm-s-inner .cm-link, .cm-s-inner.cm-link { color: rgb(0, 0, 204); }
+.cm-negative { color: rgb(221, 68, 68); }
+.cm-positive { color: rgb(34, 153, 34); }
+.cm-header, .cm-strong { font-weight: 700; }
+.cm-del { text-decoration: line-through; }
+.cm-em { font-style: italic; }
+.cm-link { text-decoration: underline; }
+.cm-error { color: red; }
+.cm-invalidchar { color: red; }
+.cm-constant { color: rgb(38, 139, 210); }
+.cm-defined { color: rgb(181, 137, 0); }
+div.CodeMirror span.CodeMirror-matchingbracket { color: rgb(0, 255, 0); }
+div.CodeMirror span.CodeMirror-nonmatchingbracket { color: rgb(255, 34, 34); }
+.cm-s-inner .CodeMirror-activeline-background { background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; background-position: inherit inherit; background-repeat: inherit inherit; }
+.CodeMirror { position: relative; overflow: hidden; }
+.CodeMirror-scroll { height: 100%; outline: 0px; position: relative; box-sizing: content-box; background-image: inherit; background-size: inherit; background-attachment: inherit; background-origin: inherit; background-clip: inherit; background-color: inherit; background-position: inherit inherit; background-repeat: inherit inherit; }
+.CodeMirror-sizer { position: relative; }
+.CodeMirror-gutter-filler, .CodeMirror-hscrollbar, .CodeMirror-scrollbar-filler, .CodeMirror-vscrollbar { position: absolute; z-index: 6; display: none; }
+.CodeMirror-vscrollbar { right: 0px; top: 0px; overflow: hidden; }
+.CodeMirror-hscrollbar { bottom: 0px; left: 0px; overflow: hidden; }
+.CodeMirror-scrollbar-filler { right: 0px; bottom: 0px; }
+.CodeMirror-gutter-filler { left: 0px; bottom: 0px; }
+.CodeMirror-gutters { position: absolute; left: 0px; top: 0px; padding-bottom: 30px; z-index: 3; }
+.CodeMirror-gutter { white-space: normal; height: 100%; box-sizing: content-box; padding-bottom: 30px; margin-bottom: -32px; display: inline-block; }
+.CodeMirror-gutter-wrapper { position: absolute; z-index: 4; border: none !important; background-position: 0px 0px !important; background-repeat: initial initial !important; }
+.CodeMirror-gutter-background { position: absolute; top: 0px; bottom: 0px; z-index: 4; }
+.CodeMirror-gutter-elt { position: absolute; cursor: default; z-index: 4; }
+.CodeMirror-lines { cursor: text; }
+.CodeMirror pre { border-top-left-radius: 0px; border-top-right-radius: 0px; border-bottom-right-radius: 0px; border-bottom-left-radius: 0px; border-width: 0px; font-family: inherit; font-size: inherit; margin: 0px; white-space: pre; word-wrap: normal; color: inherit; z-index: 2; position: relative; overflow: visible; background-position: 0px 0px; background-repeat: initial initial; }
+.CodeMirror-wrap pre { word-wrap: break-word; white-space: pre-wrap; word-break: normal; }
+.CodeMirror-code pre { border-right-width: 30px; border-right-style: solid; border-right-color: transparent; width: fit-content; }
+.CodeMirror-wrap .CodeMirror-code pre { border-right-style: none; width: auto; }
+.CodeMirror-linebackground { position: absolute; left: 0px; right: 0px; top: 0px; bottom: 0px; z-index: 0; }
+.CodeMirror-linewidget { position: relative; z-index: 2; overflow: auto; }
+.CodeMirror-wrap .CodeMirror-scroll { overflow-x: hidden; }
+.CodeMirror-measure { position: absolute; width: 100%; height: 0px; overflow: hidden; visibility: hidden; }
+.CodeMirror-measure pre { position: static; }
+.CodeMirror div.CodeMirror-cursor { position: absolute; visibility: hidden; border-right-style: none; width: 0px; }
+.CodeMirror div.CodeMirror-cursor { visibility: hidden; }
+.CodeMirror-focused div.CodeMirror-cursor { visibility: inherit; }
+.cm-searching { background-color: rgba(255, 255, 0, 0.4); background-position: initial initial; background-repeat: initial initial; }
+@media print { 
+  .CodeMirror div.CodeMirror-cursor { visibility: hidden; }
+}
 
-<p>可以看到任何人都用x权限，也就是执行权限。我们使用root先运行一下得到以下结果:</p>
 
-<pre><code class="language-shell">root@test:$ id
-uid=0(root) gid=0(root) groups=0(root)
-root@test:$ ./a.out 
-uid:  0
-gid:  0
-euid: 0
-egid: 0
-</code></pre>
+/* cyrillic-ext */
+/* cyrillic */
+/* greek-ext */
+/* greek */
+/* vietnamese */
+/* latin-ext */
+/* latin */
+/* cyrillic-ext */
+/* cyrillic */
+/* greek-ext */
+/* greek */
+/* vietnamese */
+/* latin-ext */
+/* latin */
+/* cyrillic-ext */
+/* cyrillic */
+/* greek-ext */
+/* greek */
+/* vietnamese */
+/* latin-ext */
+/* latin */
+/* cyrillic-ext */
+/* cyrillic */
+/* greek-ext */
+/* greek */
+/* vietnamese */
+/* latin-ext */
+/* latin */
+@font-face {
+    font-family: 'Source Sans Pro';
+    font-style: normal;
+    font-weight: 600;
+    src: local('Source Sans Pro SemiBold'), local('SourceSansPro-SemiBold'), url('file:///Users/swagger/Library/Application%20Support/abnerworks.Typora/themes/vue/6xKydSBYKcSV-LCoeQqfX1RYOo3i54rwlxdu.woff2') format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}@import '';
 
-<p>现在换成swagger用户，先查看swagger用户的id:</p>
+:root {
+    --side-bar-bg-color: #fff;
+    --control-text-color: #777;
+    --font-sans-serif: 'Ubuntu', 'Source Sans Pro', sans-serif !important;
+    --font-monospace: 'Fira Code', 'Roboto Mono', monospace !important;
+}
 
-<pre><code class="language-shell">swagger@test:$ id
-uid=1001(swagger) gid=1001(swagger) groups=1001(swagger)
-swagger@test:$ ./a.out
-uid:  1001
-gid:  1001
-euid: 1001
-egid: 1001
-</code></pre>
+html {
+    font-size: 16px;
+}
 
-<p>通过上面的例子可以看到确实当一个文件被运行时候，它的 <strong>有效用户ID和有效用户组ID</strong> 是和当前的 <strong>运行者(运行者的实际用户ID和实际用户组ID)</strong> 有关的。</p>
+body {
+    font-family: var(--font-sans-serif);
+    color: #34495e;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6rem;
+    letter-spacing: 0;
+    margin: 0;
+    overflow-x: hidden;
+}
 
-<p>但以上结论并不是一定的，我们可以通过<code>st_mode</code>标志位设置一个文件运行时候的 <strong>有效用户ID和有效用户组ID</strong> 。我们使用<code>chmod u+s a.out</code>将a.out的设置用户ID标志位设为有效，之后我们再使用<code>root</code>和<code>swagger</code>各运行一次得到：</p>
+#write {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 20px 30px 100px;
+}
 
-<pre><code class="language-shell">root@test:$ ./a.out 
-uid:  0
-gid:  0
-euid: 0
-egid: 0
-</code></pre>
+#write p {
+    line-height: 1.6rem;
+    word-spacing: .05rem;
+}
 
-<pre><code class="language-shell">swagger@test:$ ./a.out
-uid:  1001
-gid:  1001
-euid: 0
-egid: 1001
-</code></pre>
+#write ol li {
+    padding-left: 0.5rem;
+}
 
-<p>以上可以看到，当使用swagger运行之后， <strong><code>a.out</code>进程的<code>euid</code>也就是<code>有效用户ID</code>变成了0</strong> 。现在，谜题已经解开。<br/>
-<strong>uid和gid称为实际用户ID和实际用户组ID的，是用来表示<code>我是谁？</code></strong> 。<br/>
-<strong>euid和egid称为有效用户ID和有效用户组ID的，是用来表示<code>我有多少权限？我能以谁的名义来执行这个程序？</code></strong> 。接下来我们来验证这个想法</p>
+#write > ul:first-child,
+#write > ol:first-child {
+    margin-top: 30px;
+}
 
-<pre><code class="language-c">#include &lt;unistd.h&gt;
-#include &lt;sys/fcntl.h&gt;
-#include &lt;stdio.h&gt;
-#include &lt;stdlib.h&gt;
-#include &lt;errno.h&gt;
-int main(){
-    printf(&quot;uid:  %d\n&quot;, getuid());
-    printf(&quot;gid:  %d\n&quot;, getgid());
-    printf(&quot;euid: %d\n&quot;, geteuid());
-    printf(&quot;egid: %d\n&quot;, getegid());
-    int fd = open(&quot;/root/test&quot;, O_RDONLY);
-    if (fd &lt; 0){
-            printf(&quot;open() fial!\n&quot;);
-            printf(&quot;%s\n&quot;, strerror(errno));
-            exit(1);
+body > *:first-child {
+    margin-top: 0 !important;
+}
+
+body > *:last-child {
+    margin-bottom: 0 !important;
+}
+
+a {
+    color: #42b983;
+    font-weight: 600;
+    padding: 0 2px;
+    text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    position: relative;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    font-weight: bold;
+    line-height: 1.4;
+    cursor: text;
+}
+
+h1:hover a.anchor,
+h2:hover a.anchor,
+h3:hover a.anchor,
+h4:hover a.anchor,
+h5:hover a.anchor,
+h6:hover a.anchor {
+    text-decoration: none;
+}
+
+h1 tt,
+h1 code {
+    font-size: inherit !important;
+}
+
+h2 tt,
+h2 code {
+    font-size: inherit !important;
+}
+
+h3 tt,
+h3 code {
+    font-size: inherit !important;
+}
+
+h4 tt,
+h4 code {
+    font-size: inherit !important;
+}
+
+h5 tt,
+h5 code {
+    font-size: inherit !important;
+}
+
+h6 tt,
+h6 code {
+    font-size: inherit !important;
+}
+
+h2 a,
+h3 a {
+    color: #34495e;
+}
+
+h1 {
+    padding-bottom: .4rem;
+    font-size: 2.2rem;
+    line-height: 1.3;
+}
+
+h2 {
+    font-size: 1.75rem;
+    line-height: 1.225;
+    margin: 35px 0 15px;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid #ddd;
+}
+
+h3 {
+    font-size: 1.4rem;
+    line-height: 1.43;
+    margin: 20px 0 7px;
+}
+
+h4 {
+    font-size: 1.2rem;
+}
+
+h5 {
+    font-size: 1rem;
+}
+
+h6 {
+    font-size: 1rem;
+    color: #777;
+}
+
+p,
+blockquote,
+ul,
+ol,
+dl,
+table {
+    margin: 0.8em 0;
+}
+
+li > ol,
+li > ul {
+    margin: 0 0;
+}
+
+hr {
+    height: 2px;
+    padding: 0;
+    margin: 16px 0;
+    background-color: #e7e7e7;
+    border: 0 none;
+    overflow: hidden;
+    box-sizing: content-box;
+}
+
+body > h2:first-child {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+body > h1:first-child {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+body > h1:first-child + h2 {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+body > h3:first-child,
+body > h4:first-child,
+body > h5:first-child,
+body > h6:first-child {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+a:first-child h1,
+a:first-child h2,
+a:first-child h3,
+a:first-child h4,
+a:first-child h5,
+a:first-child h6 {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+h1 p,
+h2 p,
+h3 p,
+h4 p,
+h5 p,
+h6 p {
+    margin-top: 0;
+}
+
+li p.first {
+    display: inline-block;
+}
+
+ul,
+ol {
+    padding-left: 30px;
+}
+
+ul:first-child,
+ol:first-child {
+    margin-top: 0;
+}
+
+ul:last-child,
+ol:last-child {
+    margin-bottom: 0;
+}
+
+blockquote {
+    border-left: 4px solid #42b983;
+    padding: 10px 15px;
+    color: #777;
+    background-color: rgba(66, 185, 131, .1);
+}
+
+table {
+    padding: 0;
+    word-break: initial;
+}
+
+table tr {
+    border-top: 1px solid #dfe2e5;
+    margin: 0;
+    padding: 0;
+}
+
+table tr:nth-child(2n),
+thead {
+    background-color: #fafafa;
+}
+
+table tr th {
+    font-weight: bold;
+    border: 1px solid #dfe2e5;
+    border-bottom: 0;
+    text-align: left;
+    margin: 0;
+    padding: 6px 13px;
+}
+
+table tr td {
+    border: 1px solid #dfe2e5;
+    text-align: left;
+    margin: 0;
+    padding: 6px 13px;
+}
+
+table tr th:first-child,
+table tr td:first-child {
+    margin-top: 0;
+}
+
+table tr th:last-child,
+table tr td:last-child {
+    margin-bottom: 0;
+}
+
+#write strong {
+    padding: 0 1px;
+}
+
+#write em {
+    padding: 0 5px 0 2px;
+}
+
+#write table thead th {
+    background-color: #f2f2f2;
+}
+
+#write .CodeMirror-gutters {
+    border-right: none;
+}
+
+#write .md-fences {
+    border: 1px solid #F4F4F4;
+    -webkit-font-smoothing: initial;
+    margin: 0.8rem 0 !important;
+    padding: 0.3rem 0 !important;
+    line-height: 1.43rem;
+    background-color: #F8F8F8 !important;
+    border-radius: 2px;
+    font-family: var(--font-monospace);
+    font-size: 0.85rem;
+    word-wrap: normal;
+}
+
+#write .CodeMirror-wrap .CodeMirror-code pre {
+    padding-left: 12px;
+}
+
+#write code, tt {
+    padding: 2px 4px;
+    border-radius: 2px;
+    font-family: var(--font-monospace);
+    font-size: 0.92rem;
+    color: #e96900;
+    background-color: #f8f8f8;
+}
+
+tt {
+    margin: 0 2px;
+}
+
+#write .md-footnote {
+    background-color: #f8f8f8;
+    color: #e96900;
+}
+
+/* heighlight. */
+#write mark {
+    background-color: #EBFFEB;
+    border-radius: 2px;
+    padding: 2px 4px;
+    margin: 0 2px;
+    color: #222;
+    font-weight: 500;
+}
+
+#write del {
+    padding: 1px 2px;
+}
+
+.cm-s-inner .cm-link,
+.cm-s-inner.cm-link {
+    color: #22a2c9;
+}
+
+.cm-s-inner .cm-string {
+    color: #22a2c9;
+}
+
+.md-task-list-item > input {
+    margin-left: -1.3em;
+}
+
+@media print {
+    html {
+        font-size: 13px;
     }
-    char *buf = malloc(128);
 
-    read(fd, buf, 128);
-    printf(&quot;content: %s\n&quot;, buf);
-    close(fd);
+    table,
+    pre {
+        page-break-inside: avoid;
+    }
+
+    pre {
+        word-wrap: break-word;
+    }
 }
-</code></pre>
 
-<p>我们尝试使用<code>a.out</code>来读取<code>/root/test</code>文件，这个文件是在<code>/root</code>目录下， <strong>需要拥有root权限才可以读取</strong> !不同用户运行得到:</p>
+.md-fences {
+    background-color: #f8f8f8;
+}
 
-<pre><code class="language-shell">root@test:$ ./a.out 
-uid:  0
-gid:  0
-euid: 0
-egid: 0
-content: this is root&#39;s file! no one can see this except root!!
-</code></pre>
+.md-diagram-panel {
+    position: static !important;
+}
 
-<pre><code class="language-shell">swagger@test:$ ./a.out
-uid:  1001
-gid:  1001
-euid: 1001
-egid: 1001
-open() fial!
-Segmentation fault
-</code></pre>
+#write pre.md-meta-block {
+    padding: 1rem;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f7f7f7;
+    border: 0;
+    border-radius: 3px;
+    color: #777777;
+    margin-top: 0 !important;
+}
 
-<p><code>swagger</code>没有权限读取<code>/root</code>下文件，必定读取失败。我们尝试使用<code>chmod u+s a.out</code>将<code>a.out</code>的 <strong>有效运行ID</strong> 设置为root <strong>(运行起来的程序以root的名义来跑，但是本身还是属于swagger用户的进程)</strong> ，结果:</p>
+.mathjax-block > .code-tooltip {
+    bottom: .375rem;
+}
 
-<pre><code class="language-shell">swagger@test:$ ./a.out
-uid:  1001
-gid:  1001
-euid: 0
-egid: 1001
-content: this is root&#39;s file! no one can see this except root!!
-</code></pre>
+#write > h3.md-focus:before {
+    left: -1.5625rem;
+    top: .375rem;
+}
 
-<p><strong>可以看到，<code>a.out</code>是一个swagger的进程，但是是以<code>root</code>的权限来运行的。由此，我们成功读取到了内容</strong> 。</p>
+#write > h4.md-focus:before {
+    left: -1.5625rem;
+    top: .285714286rem;
+}
 
-        
+#write > h5.md-focus:before {
+    left: -1.5625rem;
+    top: .285714286rem;
+}
+
+#write > h6.md-focus:before {
+    left: -1.5625rem;
+    top: .285714286rem;
+}
+
+.md-image > .md-meta {
+    border-radius: 3px;
+    font-family: var(--font-monospace);
+    padding: 2px 0 0 4px;
+    font-size: 0.9em;
+    color: inherit;
+}
+
+.md-tag {
+    color: inherit;
+}
+
+.md-toc {
+    margin-top: 20px;
+    padding-bottom: 20px;
+}
+
+.sidebar-tabs {
+    border-bottom: none;
+}
+
+#typora-quick-open {
+    border: 1px solid #ddd;
+    background-color: #f8f8f8;
+}
+
+#typora-quick-open-item {
+    background-color: #FAFAFA;
+    border-color: #FEFEFE #e5e5e5 #e5e5e5 #eee;
+    border-style: solid;
+    border-width: 1px;
+}
+
+#md-notification:before {
+    top: 10px;
+}
+
+/** focus mode */
+
+.on-focus-mode blockquote {
+    border-left-color: rgba(85, 85, 85, 0.12);
+}
+
+header,
+.context-menu,
+.megamenu-content,
+footer {
+    font-family: var(--font-sans-serif);
+}
+
+.file-node-content:hover .file-node-icon,
+.file-node-content:hover .file-node-open-state {
+    visibility: visible;
+}
+
+.mac-seamless-mode #typora-sidebar {
+    background-color: var(--side-bar-bg-color);
+}
+
+.md-lang {
+    color: #b4654d;
+}
+
+.html-for-mac .context-menu {
+    --item-hover-bg-color: #E6F0FE;
+}
 
 
-        
-    </body>
+ :root {--mermaid-font-zoom:1em ;}  @media print { @page {margin: 0 0 0 0;} body.typora-export {padding-left: 0; padding-right: 0;} #write {padding:0;}}
+</style><title>linux_file</title>
+</head>
+<body class='typora-export'><div class='typora-export-content'>
+<div id='write'  class=''><ul><li><p><a href='#linux-file'><span>linux-file</span></a></p><ul><li><p><a href='#一函数'><span>一、函数</span></a></p><ul><li><a href='#1-open函数'><span>1. open函数</span></a></li><li><a href='#2-close函数'><span>2. close函数</span></a></li><li><a href='#3-lseek函数'><span>3. lseek函数</span></a></li><li><a href='#4-read函数'><span>4. read函数</span></a></li><li><a href='#5-write函数'><span>5. write函数</span></a></li><li><a href='#6-pread函数与pwrite函数'><span>6. pread函数与pwrite函数</span></a></li><li><a href='#7-dup函数和dup2函数'><span>7. dup函数和dup2函数</span></a></li><li><a href='#8readv和writev函数'><span>8.readv和writev函数</span></a></li><li><a href='#9-储存映射io函数mmap'><span>9. 储存映射IO函数mmap</span></a></li></ul></li><li><p><a href='#二文件共享'><span>二、文件共享</span></a></p><ul><li><a href='#1-维护文件的数据结构'><span>1. 维护文件的数据结构</span></a></li></ul></li><li><p><a href='#三文件权限'><span>三、文件权限</span></a></p><ul><li><a href='#1文件类型'><span>1.文件类型</span></a></li><li><a href='#2-权限'><span>2. 权限</span></a></li></ul></li></ul></li></ul><h1 id='linux-file'><span>linux-file</span></h1><h2 id='一函数'><span>一、函数</span></h2><h3 id='1-open函数'><span>1. open函数</span></h3><p><strong><span>int open(const char* path, mode_t mode);</span></strong></p><ul><li><span>O_RDONLY </span><strong><span>只读打开</span></strong><span>  RD--&gt;read.  ONLY</span></li><li><span>O_WRONLY </span><strong><span>只写打开</span></strong><span>  WD--&gt;write. ONLY</span></li><li><span>O_RDWD </span><strong><span>读写打开</span></strong><span>    WD--&gt;write. RD--&gt;read</span></li><li><span>O_EXEC </span><strong><span>只执行打开</span></strong></li><li><span>O_SEARCH </span><strong><span>只搜索打开</span></strong></li><li><span>O_APPEND </span><strong><span>追加，写的时候追加到文件尾部</span></strong></li><li><span>O_CREAT </span><strong><span>文件不存在则创建(需要添加访问权限..)</span></strong></li><li><span>O_NONBLOCK </span><strong><span>将文件描述符设置为非堵塞型</span></strong></li><li><span>O_SYNC </span><strong><span>使每次write等待物理I/O操作完成</span></strong></li><li><span>O_TRUNC (..)</span></li></ul><p><span>以上是mode_t的参数，其中(O_RDWD | O_CREAT | O_TRUNC)三个参数一起传入可以实现和</span><code>creat()</code><span>函数一样的效果，</span><code>creat()</code><span>函数是早期unix系统的遗留问题额外添加，现在可以由</span><code>open()</code><span>函数直接代替。对于打开文件错误等其他原因会使linux设置errno变量，对应某些错误的原因， </span><strong><span>其中需要注意的是定义</span><code>errno</code><span>变量的头文件为</span><code>&lt;errno.h&gt;</code><span>而定义打印字符错误提示符的函数</span><code>char *strerror(int errno);</code><span>函数是定义在头文件</span><code>&lt;string.h&gt;</code><span>中的</span></strong><span> 。</span></p><h3 id='2-close函数'><span>2. close函数</span></h3><p><strong><span>int close(int fd);</span></strong>
+<span>关闭一个文件描述符号，同时也会关闭设置在这个文件上的所有</span><code>记录锁</code><span>。</span></p><h3 id='3-lseek函数'><span>3. lseek函数</span></h3><p><strong><span>off_t lseek(int fd, off_t offset, int whence);</span></strong></p><ul><li><span>SEEK_CUR </span><strong><span>返回当前文件位置，如果offset有数据则将偏移量增加到对应的fd中</span></strong></li><li><span>SEEK_SET </span><strong><span>将文件偏移量设置为offset</span></strong></li><li><span>SEEK_END </span><strong><span>返回文件长度，如果offset有数据则将文件长度增加offset</span></strong></li></ul><blockquote><p><span>其中off_t的原型是 int64_t 也就是 long long型</span></p></blockquote><p><span>用来查看文件描述符fd当前读取到的位置偏移量，其中实现方法使用的是fd所对应的结构体(之后解释)。使用对象是网络套接字和标准输入输出描述符则会出现报错。</span></p><h3 id='4-read函数'><span>4. read函数</span></h3><p><strong><span>ssize_t read(int fd, void* buf, size_t nbytes);</span></strong></p><p><span>read成功，返回读到的字节数。如果已经达到文件尾部，则返回0。</span>
+<span>如果 </span><code>size_t nbytes</code><span>所给定的数值过大，超过文件描述符中数据的长度，则直接全部读取，并且返回</span><code>fd中所有的数据的 长度</code><span>，</span><code>下一次读取时返回 0</code><span>。</span>
+<span>如果读取的是</span><code>管道、网络套接字或者标准输入与标准输出</code><span>且其中没有数据，则会出现 </span><strong><span>堵塞</span></strong><span>，将描述符设置为 </span><strong><span>NONBLOCK</span></strong><span>则会直接返回</span><code>-1并且设置errno</code><span>。read函数不对</span><code>buf</code><span>参数负责，如果 </span><strong><span>buf空间小于nbytes和fd中数据长度,</span></strong><span>  </span><strong><span>空间大小不够的buf持续读入可能会出现</span><code>越界</code><span>情况。</span></strong></p><h3 id='5-write函数'><span>5. write函数</span></h3><p><strong><span>ssize_t write(int fd, void* buf, size_t nbytes);</span></strong></p><p><span>write函数则和read函数返回值相同，通过fd所绑定的结构体中所记录的当前文件偏移量写入数据。其中</span><code>O_APPEND</code><span>方式打开会影响文件状态标志(细节见文件的数据结构)。如果</span><code>size_t nbytes</code><span>的数值超过buf，那么只会写入buf中的所有数据并且返回buf的长度。出错时候设置</span><code>errno</code><span>。</span></p><h3 id='6-pread函数与pwrite函数'><span>6. pread函数与pwrite函数</span></h3><p><strong><span>ssize_t pread(int fd, void* buf, size_t nbytes, off_t offset);</span></strong>
+<strong><span>ssize_t pwrite(int fd, const void* buf, size_t nbytes, off_t offset);</span></strong></p><p><span>调用pread方法相当于调用了lseek后调用read，与自己手动调用这两个函数的区别：</span></p><ul><li><span>pread运行时不可中断其定位和读操作。</span></li><li><span>不更新当前文件偏移量。</span></li></ul><h3 id='7-dup函数和dup2函数'><span>7. dup函数和dup2函数</span></h3><p><strong><span>int dup(int fd);</span></strong>
+<strong><span>int dup2(int fd, int fd2);</span></strong></p><p><strong><span>dup和dup2函数是干什么的用一张图片就可以清楚解释：</span></strong>
+<img src="./linux_file_pic/linux_file3.png" referrerpolicy="no-referrer">
+<span>返回一个新的文件描述符，它所指向的文件和参数fd指向的文件相同。</span></p><p><span>dup函数返回一个新文件描述符，是当前文件描述符中最小值。对于dup2，可以使用fd2参数来指定新的描述符的值，如果fd2已经打开，就先关闭fd2。如果fd2等于fd，则直接返回fd2。</span></p><h3 id='8readv和writev函数'><span>8.readv和writev函数</span></h3><p><span>readv和writev即散布读和散布写，可以在一次调用读写多个缓冲区。使用这种方案比多次调用read或者write函数效率要高，毕竟谁也不想调用相同的系统调用多次，徒增切换花销。</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C++"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c++"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre>x</pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;sys/uio.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ssize_t</span> <span class="cm-def">readv</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">fd</span>, <span class="cm-keyword">const</span> <span class="cm-variable">iovec</span> <span class="cm-operator">*</span><span class="cm-variable">iov</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">iovcnt</span>);</span></pre><div class="" style="position: relative;"><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">ssize_t</span> <span class="cm-def">writev</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">fd</span>, <span class="cm-keyword">const</span> <span class="cm-variable">iovec</span><span class="cm-operator">*</span> <span class="cm-variable">iov</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">iovcnt</span>);</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">// iov是一个指向iovec结构体的数组，iovcnt表示数组个数</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">struct</span> <span class="cm-def">iovec</span>{</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">void</span> <span class="cm-variable-3">*</span><span class="cm-variable">iov_base</span>; <span class="cm-comment">/* 起始地址 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">size_t</span> <span class="cm-variable">iov_len</span>;<span class="cm-comment">/* 长度 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">};</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 220px;"></div><div class="CodeMirror-gutters" style="display: none; height: 220px;"></div></div></div></pre><h3 id='9-储存映射io函数mmap'><span>9. 储存映射IO函数mmap</span></h3><p><span>储存映射能将磁盘上的一个文件直接映射到内存中的一个缓冲区上，当从缓存区中读写信息就等同于在文件中读写信息，即在不实用read和write的情况下执行IO操作。</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C++"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c++"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;sys/mman.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">/* 返回值为映射区指向的地址 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">void</span> <span class="cm-variable-3">*</span><span class="cm-def">mmap</span>(<span class="cm-variable-3">void</span> <span class="cm-variable-3">*</span><span class="cm-variable">addr</span>, <span class="cm-variable-3">size_t</span> <span class="cm-variable">len</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">prot</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">flag</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">fd</span>, <span class="cm-variable">off_t</span> <span class="cm-variable">off</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">/* 改变映射区的权限 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">mprotect</span>(<span class="cm-variable-3">void</span> <span class="cm-variable-3">*</span><span class="cm-variable">addr</span>, <span class="cm-variable-3">size_t</span> <span class="cm-variable">len</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">prot</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">/* 关闭映射区 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">munmap</span>(<span class="cm-variable-3">void*</span> <span class="cm-variable">addr</span>, <span class="cm-variable-3">size_t</span> <span class="cm-variable">len</span>);</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><p><span>addr参数指向一个地址，表示将磁盘数据映射到这个地址上，建议设置为0，由操作系统接管。</span>
+<span>prot表示映射地区的保护要求，可按位打开</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C++"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c++"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">PROT_READ</span> <span class="cm-comment">// 映射区可读</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">PROT_WRITE</span> <span class="cm-comment">// 映射区可写</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">PROT_EXEC</span> <span class="cm-comment">// 映射区可执行</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">PROT_NONE</span> <span class="cm-comment">// 映射区不可访问</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 88px;"></div><div class="CodeMirror-gutters" style="display: none; height: 88px;"></div></div></div></pre><p><span>flag字段可以用来设置映射区的属性等</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C++"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c++"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">MAP_FIXED</span> <span class="cm-comment">// 必返回指定的addr地址，不建议</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">MAP_SHARED</span> <span class="cm-comment">// 对于映射区的操作等同于对文件的操作</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">MAP_PRIVATE</span> <span class="cm-comment">// 对于缓存的操作不改变文件本身 调试可用</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 66px;"></div><div class="CodeMirror-gutters" style="display: none; height: 66px;"></div></div></div></pre><p><span>fd为指向的文件，off表示文件偏移量</span>
+<span>最后，fork的子进程是可以继承映射区的，但是exec后就不共享了。</span></p><p>&nbsp;</p><h2 id='二文件共享'><span>二、文件共享</span></h2><h3 id='1-维护文件的数据结构'><span>1. 维护文件的数据结构</span></h3><p><span>每一个进程中都存在一个 </span><strong><span>进程表项</span></strong><span>，其中存有</span><code>fd</code><span>所对应的</span><code>文件指针</code><span>，</span><code>文件指针</code><span>又指向 </span><strong><span>文件表项</span></strong><span>，文件表项中储存着当前</span><code>文件状态标志</code><span>，</span><code>当前文件偏移量</code><span>(只针对打开此文件的进程，每一个进程维护着自己的文件偏移量)，以及</span><code>v节点指针</code><span>(linux中不使用vnode)。</span>
+<img src="./linux_file_pic/linux_file1.png" referrerpolicy="no-referrer"></p><p><span>如果两个独立的进程打开了相同的文件：</span>
+<img src="./linux_file_pic/linux_file2.png" referrerpolicy="no-referrer"></p><p><span>使用</span><code>O_APPEND</code><span>打开方式的时候， </span><strong><span>每次write往文件中写入都会实时通过文件v节点指针(i节点指针)获取文件长度</span></strong><span>，并且加上偏移量进行写入，这种方法和使用lseek函数实现的有差别。</span></p><p><span>例如有两个进程A与B，A和B都打开了相同的文件(没有使用</span><code>O_APPEND</code><span>标志位)，A和B的进程中都有着自己独立的 </span><strong><span>文件表项</span></strong><span>，有着自己的 </span><strong><span>文件偏移量</span></strong><span>，文件初始大小1500， </span><strong><span>之后A使用lseek获取了文件大小</span></strong><span>， </span><strong><span>想往文件尾部写入100字节</span></strong><span>，但是巧合的是这时候内核</span><code>切换</code><span>了进程。进程B开始运行，进程B进行和A一样的操作， </span><strong><span>lseek文件得到1500</span></strong><span>，写入100字节，之后文件长度 </span><strong><span>更新到1600</span></strong><span>。内核再次切换到进程A运行， </span><strong><span>从1500处开始写入</span></strong><span>，进而发生错误。 </span><strong><span>如果该用O_APPEND方法就可以避免此问题，因为O_APPEND标志位是偏移量+文件长度的方式，可以实时获取真正的文件长度，但是这种方法也存在问题</span></strong><span>。另一种解决方式正是</span><code>原子操作</code><span>。</span></p><h2 id='三文件权限'><span>三、文件权限</span></h2><h3 id='1文件类型'><span>1.文件类型</span></h3><p><span>在理解文件权限之前，我们先了解一下文件权限是怎么存储在linux中的。linux提供许多API来获取文件信息的函数</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;sys/stat.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">stat</span>(<span class="cm-keyword">const</span> <span class="cm-variable-3">char*</span> <span class="cm-variable">pathname</span>, <span class="cm-keyword">struct</span> <span class="cm-def">stat</span><span class="cm-operator">*</span> <span class="cm-variable">buf</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">fstat</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">fd</span>, <span class="cm-keyword">struct</span> <span class="cm-def">stat</span> <span class="cm-operator">*</span><span class="cm-variable">buf</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">lstat</span>(<span class="cm-keyword">const</span> <span class="cm-variable-3">char*</span> <span class="cm-variable">pathname</span>, <span class="cm-keyword">struct</span> <span class="cm-def">stat</span><span class="cm-operator">*</span> <span class="cm-variable">buf</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">fstatat</span>(<span class="cm-variable-3">int</span> <span class="cm-variable">fd</span>, <span class="cm-keyword">const</span> <span class="cm-variable-3">char*</span> <span class="cm-variable">pathname</span>, <span class="cm-keyword">struct</span> <span class="cm-def">stat</span><span class="cm-operator">*</span> <span class="cm-variable">buf</span>, <span class="cm-variable-3">int</span> <span class="cm-variable">flag</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-comment">// 成功return 0，出错return -1</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 176px;"></div><div class="CodeMirror-gutters" style="display: none; height: 176px;"></div></div></div></pre><p><span>对于返回的</span><code>结构体stat</code><span>的定义如下</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C" style="page-break-inside: unset;"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-keyword">struct</span> <span class="cm-def">stat</span>{</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">mode_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">st_mode</span>; <span class="cm-comment">/* 文件类型和权限都存储在此 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">ino_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_ino</span>; <span class="cm-comment">/* i-node节点个数 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">dev_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_dev</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">dev_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_rdev</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">nlink_t</span> &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_nlink</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">uid_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_uid</span>; <span class="cm-comment">/* 所有者ID */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">gid_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_gid</span>; <span class="cm-comment">/* 所有组ID */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">off_t</span> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_size</span>; <span class="cm-comment">/* 文件长度，主要用于普通文件 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">struct</span> <span class="cm-def">timespec</span> <span class="cm-def">st_atime</span>; <span class="cm-comment">/* 最后访问时间 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">struct</span> <span class="cm-def">timespec</span> <span class="cm-def">st_mtime</span>; <span class="cm-comment">/* 最后修改时间 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">struct</span> <span class="cm-def">timespec</span> <span class="cm-def">st_ctime</span>; <span class="cm-comment">/* 最后改变文件状态时间 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">blksize_t</span> &nbsp; &nbsp; &nbsp; <span class="cm-variable">st_blksize</span>;</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">blkcnt_t</span> &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">st_blocks</span>; <span class="cm-comment">/* 磁盘中分配了多少个块 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">};</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 330px;"></div><div class="CodeMirror-gutters" style="display: none; height: 330px;"></div></div></div></pre><p><span>对于其中比较常用的几个字段，如st_mode可以使用Linux所定义的宏来进行访问。</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISREG</span>() <span class="cm-comment">/* 是否为普通文件 */</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISDIR</span>() <span class="cm-comment">/* 是否为目录文件 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISCHR</span>() <span class="cm-comment">/* 字符特殊文件 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISBLK</span>() <span class="cm-comment">/* 块特殊文件 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISFIFO</span>() <span class="cm-comment">/* 管道符文件 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISLNK</span>() <span class="cm-comment">/* 符号链接 */</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable">S_ISSOCK</span>() <span class="cm-comment">/* 是否为套接字 */</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><h3 id='2-权限'><span>2. 权限</span></h3><p><span>Linux中有许多关于ID概念</span>
+<span>    </span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang=""><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang=""><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 实际用户ID</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 实际组ID</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 有效用户ID</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 有效组ID</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 附属组ID</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 保存的设置用户ID</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">* 保存的设置组ID</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><p><span>对于stat结构体中存在的两个字段</span><code>st_uid</code><span>和</span><code>st_gid</code><span>分别对应 </span><strong><span>文件的所有者</span></strong><span> 和 </span><strong><span>文件的所有者组</span></strong><span> 。 当我们以</span><code>swagger</code><span>用户登陆时候，我们所登陆的那个shell的ID也就是</span><code>swagger</code><span>用户的ID，称为 </span><strong><span>实际用户ID和实际用户组ID</span></strong><span> 。</span>
+<span>我们可以通俗的暂时理解 </span><strong><span>实际用户ID和实际用户组ID是一个</span><code>操作者的权限</code></strong><span> ，而 </span><strong><span>有效用户ID和有效用户组ID是一个</span><code>运行起来的进程的权限</code></strong><span> ，带着这个暂时的理解，我们来看一个例子。</span>
+<span>当一个可执行文件执行的时候，这个文件所执行后生成的进程会有一个 </span><strong><span>有效用户ID和有效用户组ID</span></strong><span> ，它们通常就是这个文件(可执行文件)的 </span><strong><span>执行者的实际用户ID</span></strong><span> 。当然这个所谓的 </span><strong><span>执行者用户ID到底有没有权限执行这个文件我们先不讨论</span></strong><span> ，假设</span><code>swagger</code><span>用户可以执行一个文件，那么那个文件执行后生成的进程的 </span><strong><span>有效用户ID和有效用户组ID</span></strong><span> 就是</span><code>swagger</code><span>用户的 </span><strong><span>实际用户ID和实际用户组ID</span></strong><span> 。</span>
+<span>我们先创建如下程序：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>(){</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"uid:  %d\n"</span>, <span class="cm-variable">getuid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"gid:  %d\n"</span>, <span class="cm-variable">getgid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"euid: %d\n"</span>, <span class="cm-variable">geteuid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"egid: %d\n"</span>, <span class="cm-variable">getegid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 132px;"></div><div class="CodeMirror-gutters" style="display: none; height: 132px;"></div></div></div></pre><p><span>我们使用root用户创建以上程序，并且编译得到</span><code>a.out</code><span>文件，使用</span><code>ls -l</code><span>查看权限如下:</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell "><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell "><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation"><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-attribute">-rwxr-xr-x</span> <span class="cm-number">1</span> root root <span class="cm-number">8712</span> Apr <span class="cm-number">27</span> <span class="cm-number">16</span>:02 a.out</span></pre></div></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 22px;"></div><div class="CodeMirror-gutters" style="display: none; height: 22px;"></div></div></div></pre><p><span>可以看到任何人都用x权限，也就是执行权限。我们使用root先运行一下得到以下结果:</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">root@test:<span class="cm-def">$ id</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-def">uid</span><span class="cm-operator">=</span><span class="cm-number">0</span>(root) <span class="cm-def">gid</span><span class="cm-operator">=</span><span class="cm-number">0</span>(root) <span class="cm-def">groups</span><span class="cm-operator">=</span><span class="cm-number">0</span>(root)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">root@test:<span class="cm-def">$ </span>./a.out </span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">0</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><p><span>现在换成swagger用户，先查看swagger用户的id:</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">swagger@test:<span class="cm-def">$ id</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-def">uid</span><span class="cm-operator">=</span><span class="cm-number">1001</span>(swagger) <span class="cm-def">gid</span><span class="cm-operator">=</span><span class="cm-number">1001</span>(swagger) <span class="cm-def">groups</span><span class="cm-operator">=</span><span class="cm-number">1001</span>(swagger)</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">swagger@test:<span class="cm-def">$ </span>./a.out</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">1001</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><p><span>通过上面的例子可以看到确实当一个文件被运行时候，它的 </span><strong><span>有效用户ID和有效用户组ID</span></strong><span> 是和当前的 </span><strong><span>运行者(运行者的实际用户ID和实际用户组ID)</span></strong><span> 有关的。</span></p><p><span>但以上结论并不是一定的，我们可以通过</span><code>st_mode</code><span>标志位设置一个文件运行时候的 </span><strong><span>有效用户ID和有效用户组ID</span></strong><span> 。我们使用</span><code>chmod u+s a.out</code><span>将a.out的设置用户ID标志位设为有效，之后我们再使用</span><code>root</code><span>和</span><code>swagger</code><span>各运行一次得到：</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">root@test:<span class="cm-def">$ </span>./a.out </span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">0</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 110px;"></div><div class="CodeMirror-gutters" style="display: none; height: 110px;"></div></div></div></pre><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">swagger@test:<span class="cm-def">$ </span>./a.out</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">1001</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 110px;"></div><div class="CodeMirror-gutters" style="display: none; height: 110px;"></div></div></div></pre><p><span>以上可以看到，当使用swagger运行之后， </span><strong><code>a.out</code><span>进程的</span><code>euid</code><span>也就是</span><code>有效用户ID</code><span>变成了0</span></strong><span> 。现在，谜题已经解开。</span>
+<strong><span>uid和gid称为实际用户ID和实际用户组ID的，是用来表示</span><code>我是谁？</code></strong><span> 。</span>
+<strong><span>euid和egid称为有效用户ID和有效用户组ID的，是用来表示</span><code>我有多少权限？我能以谁的名义来执行这个程序？</code></strong><span> 。接下来我们来验证这个想法</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="C" style="page-break-inside: unset;"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="c"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;unistd.h&gt;</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;sys/fcntl.h&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;stdio.h&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;stdlib.h&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-meta">#include &lt;errno.h&gt;</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span class="cm-variable-3">int</span> <span class="cm-def">main</span>(){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"uid:  %d\n"</span>, <span class="cm-variable">getuid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"gid:  %d\n"</span>, <span class="cm-variable">getgid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"euid: %d\n"</span>, <span class="cm-variable">geteuid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"egid: %d\n"</span>, <span class="cm-variable">getegid</span>());</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">int</span> <span class="cm-variable">fd</span> <span class="cm-operator">=</span> <span class="cm-variable">open</span>(<span class="cm-string">"/root/test"</span>, <span class="cm-variable">O_RDONLY</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-keyword">if</span> (<span class="cm-variable">fd</span> <span class="cm-operator">&lt;</span> <span class="cm-number">0</span>){</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"open() fial!\n"</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"%s\n"</span>, <span class="cm-variable">strerror</span>(<span class="cm-variable">errno</span>));</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<span class="cm-variable">exit</span>(<span class="cm-number">1</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp;  }</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable-3">char</span> <span class="cm-variable-3">*</span><span class="cm-variable">buf</span> <span class="cm-operator">=</span> <span class="cm-variable">malloc</span>(<span class="cm-number">128</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"><span cm-text="">​</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">read</span>(<span class="cm-variable">fd</span>, <span class="cm-variable">buf</span>, <span class="cm-number">128</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">printf</span>(<span class="cm-string">"content: %s\n"</span>, <span class="cm-variable">buf</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;"> &nbsp; &nbsp;<span class="cm-variable">close</span>(<span class="cm-variable">fd</span>);</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">}</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 484px;"></div><div class="CodeMirror-gutters" style="display: none; height: 484px;"></div></div></div></pre><p><span>我们尝试使用</span><code>a.out</code><span>来读取</span><code>/root/test</code><span>文件，这个文件是在</span><code>/root</code><span>目录下， </span><strong><span>需要拥有root权限才可以读取</span></strong><span> !不同用户运行得到:</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">root@test:<span class="cm-def">$ </span>./a.out </span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">0</span></span></pre><div class="" style="position: relative;"><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">0</span></span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">content: this is root<span class="cm-string">'s file! no one can see this except root!!</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 132px;"></div><div class="CodeMirror-gutters" style="display: none; height: 132px;"></div></div></div></pre><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">swagger@test:<span class="cm-def">$ </span>./a.out</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">open() fial!</span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">Segmentation fault</span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 154px;"></div><div class="CodeMirror-gutters" style="display: none; height: 154px;"></div></div></div></pre><p><code>swagger</code><span>没有权限读取</span><code>/root</code><span>下文件，必定读取失败。我们尝试使用</span><code>chmod u+s a.out</code><span>将</span><code>a.out</code><span>的 </span><strong><span>有效运行ID</span></strong><span> 设置为root </span><strong><span>(运行起来的程序以root的名义来跑，但是本身还是属于swagger用户的进程)</span></strong><span> ，结果:</span></p><pre class="md-fences md-end-block ty-contain-cm modeLoaded" spellcheck="false" lang="shell"><div class="CodeMirror cm-s-inner CodeMirror-wrap" lang="shell"><div style="overflow: hidden; position: relative; width: 3px; height: 0px; top: 9px; left: 12px;"><textarea autocorrect="off" autocapitalize="off" spellcheck="false" tabindex="0" style="position: absolute; bottom: -1em; padding: 0px; width: 1000px; height: 1em; outline: none;"></textarea></div><div class="CodeMirror-scrollbar-filler" cm-not-content="true"></div><div class="CodeMirror-gutter-filler" cm-not-content="true"></div><div class="CodeMirror-scroll" tabindex="-1"><div class="CodeMirror-sizer" style="margin-left: 0px; margin-bottom: 0px; border-right-width: 0px; padding-right: 0px; padding-bottom: 0px;"><div style="position: relative; top: 0px;"><div class="CodeMirror-lines" role="presentation"><div role="presentation" style="position: relative; outline: none;"><div class="CodeMirror-measure"><pre><span>xxxxxxxxxx</span></pre></div><div class="CodeMirror-measure"></div><div style="position: relative; z-index: 1;"></div><div class="CodeMirror-code" role="presentation" style=""><div class="CodeMirror-activeline" style="position: relative;"><div class="CodeMirror-activeline-background CodeMirror-linebackground"></div><div class="CodeMirror-gutter-background CodeMirror-activeline-gutter" style="left: 0px; width: 0px;"></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">swagger@test:<span class="cm-def">$ </span>./a.out</span></pre></div><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">uid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">gid: &nbsp;<span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">euid: <span class="cm-number">0</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">egid: <span class="cm-number">1001</span></span></pre><pre class=" CodeMirror-line " role="presentation"><span role="presentation" style="padding-right: 0.1px;">content: this is root<span class="cm-string">'s file! no one can see this except root!!</span></span></pre></div></div></div></div></div><div style="position: absolute; height: 0px; width: 1px; border-bottom-width: 0px; border-bottom-style: solid; border-bottom-color: transparent; top: 132px;"></div><div class="CodeMirror-gutters" style="display: none; height: 132px;"></div></div></div></pre><p><strong><span>可以看到，</span><code>a.out</code><span>是一个swagger的进程，但是是以</span><code>root</code><span>的权限来运行的。由此，我们成功读取到了内容</span></strong><span> 。</span></p><p>&nbsp;</p></div></div>
+</body>
 </html>
