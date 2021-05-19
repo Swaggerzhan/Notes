@@ -22,7 +22,7 @@ __int open(const char* path, mode_t mode);__
 
 * O_RDONLY __只读打开__  RD-->read.  ONLY
 * O_WRONLY __只写打开__  WD-->write. ONLY
-* O_RDWD __读写打开__    WD-->write. RD-->read
+* O_RDWR __读写打开__    WD-->write. RD-->read
 * O_EXEC __只执行打开__
 * O_SEARCH __只搜索打开__
 * O_APPEND __追加，写的时候追加到文件尾部__
