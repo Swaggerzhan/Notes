@@ -46,6 +46,12 @@ typedef struct{
 } Elf32_Phdr;
 ```
 
+使用readelf命令可以查看到它
+
+```shell
+readelf -l ELF文件名
+```
+
     
 
 
