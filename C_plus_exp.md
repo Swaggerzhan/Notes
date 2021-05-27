@@ -815,6 +815,67 @@ int main(){
 
 ##### * 虚函数表
 
+```C++
+class A{
+public:
+    void echo(){
+        std::cout << "this is A's echo" << std::endl;
+    }
+};
+class B: public A{
+public:
+    void echo(){
+        std::cout << "this is B's echo" << std::endl;
+    }
+};
+int main(){
+    A* b = new B;
+    b->echo(); // this is A's echo
+}
+```
+
+以上调函数运行时后其实调用的是A类中的echo函数，这并不是我们所想要的，探究其原因是编译器。当编译器编译代码的时候，发现我们b解引用并且调用echo函数，只不过编译器发现这个b所属的数据类型是`A*`类型，所以理所当然调用了A所属的echo函数。
+
+我们想要做到的是使用`A*`类型指向任何其派生类，都能调用到对应的派生类中的函数，而不是基类中的函数，由此，C++引入了virtual关键字，将函数定义成一个虚拟函数，将函数的地址绑定变成了动态绑定。
+
+```C++
+class A{
+public:
+    virtual void echo(){
+        std::cout << "this is A's echo" << std::endl;
+    }
+};
+class B: public A{
+public:
+    void echo(){
+        std::cout << "this is B's echo" << std::endl;
+    }
+};
+int main(){
+    A* b = new B;
+    b->echo(); // this is B's echo
+}
+```
+
+以上便调用成功了。
+
+对象中函数不占用大小，static属于类属性，也不占用对象大小，了解了这些，就可以进入virtual虚函数了。
+
+对于使用了虚函数的类，C++编译器在编译时对调用了虚函数的位置不采用 __绑死__ ，的操作，而且是通过一个叫虚函数表的东西进行调用，虚函数表是一个指针数组，数组中的各个元素指向各个不同的虚函数，类一旦使用了虚函数，那么内存中就有一份关于这个类的虚函数表。
+
+实例化的对象通过储存一个虚函数指针，该指针指向其类的虚函数表。由此，对于`A* b`这种操作，<font color=#FF0000>编译器发现对于`b->echo()`调用的是一个虚函数，那么编译器就会通过`b`这个指针所指的内存中的虚函数指针来进行调用，通过虚函数指针找到关于其实例化的类，`b`的实例化模版是`B`，所以找到了`B`的虚函数表，进而调用了`B`的`echo`函数。</font>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
