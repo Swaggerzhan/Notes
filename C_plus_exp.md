@@ -668,7 +668,39 @@ int main(){
 
 ### 9. 智能指针！
 
-C++11标准引入了智能指针，它帮助我们管理一个动态内存的释放动作。使用 __shared_ptr< T >__ 可以将指向的地址位置引用数量增加1，当有另外一个智能指针指向时候，引用数量为2，当引用数量减少至0时，将释放指向地址的内存。
+C++引入了智能指针，它帮助我们管理一个动态内存的释放动作。
+
+__unique_ptr__ 智能指针，它表示独占一个"指针"，它控制着指针所指向的对象的生命周期，当unique_ptr这个类死亡时，调用构析函数将直接delete真正指针所指向的地址。
+unique_ptr智能指针如其名一样，是一个unique的，如果你无法复制一个unique_ptr智能指针，因为其拷贝构造函数是私有的， __并且如果你强制声明了2个unique_ptr智能指针指向同一块地址，那么运行时将报错，因为析构函数将呗调用2次造成2次free操作__。
+简单实现:
+
+```C++
+template <typename T>
+class uniquePtr{
+public:
+    uniquePtr(T* ptr)
+    :   ptr_(ptr)
+    { 
+        if (!ptr)
+            exit(-1);
+    }
+    ~uniquePtr(){
+        delete ptr_;
+    }
+    T& operator * (){
+        return *ptr_;
+    }
+    T* operator -> () {
+        return ptr_;
+    }
+private:
+    uniquePtr(const uniquePtr&){}
+    T* ptr_;
+};
+```
+
+
+使用 __shared_ptr< T >__ 和unique_ptr有不同之处，它并不是直接在析构函数中delete指针，而是采用了一个引用计数的方式来记录这块地址的使用次数，将使用次数降低至0时才会释放内存，也如它名所示，它是一个可以复制(shared_ptr)的智能指针。
 
 ```C++
 #include <iostream>
@@ -756,6 +788,14 @@ __指针是一个真正存在的变量，而引用更像是编译器实现的假
 
 对指针进行`++`运算得到的将是地址往后移动一个指针大小，对引用++得到的将是对象的`++`运算操作。
 
+new中还有一个 placement new，它允许我们在一个地址上直接调用所需要的对象的构造函数，当然这个地址需要事先申请完毕。
+
+```C++
+class Test;
+Test *t1 = new Test; // 正常operator new
+Test *t2 = (Test*)malloc(sizeof(Test)); // 申请一块地址
+new (t2) Test; // placement new 操作，将在t2的位置上调用构造函数
+```
 
 
 
@@ -872,7 +912,7 @@ int main(){
 实例化的对象通过储存一个虚函数指针，该指针指向其类的虚函数表。由此，对于`A* b`这种操作，<font color=#FF0000>编译器发现对于`b->echo()`调用的是一个虚函数，那么编译器就会通过`b`这个指针所指的内存中的虚函数指针来进行调用，通过虚函数指针找到关于其实例化的类，`b`的实例化模版是`B`，所以找到了`B`的虚函数表，进而调用了`B`的`echo`函数。</font>
 
 
-##### * 重载于重写
+##### * 重载与重写
 
 重载(Function Overload)，在同一作用域中，同名函数的形式参数不同构成函数重载。
 
@@ -881,6 +921,17 @@ int main(){
 在类中，成员函数是否为const也可以构成函数重载。
 
 重载的本质是编译过程编译器将函数进行改名，改名的规则有函数所在的命名空间，函数的形式参数等。
+
+
+##### * struct和class区别
+
+在面向过程编程中，也就是C语言中没有class，并且struct作为一个`自定义的数据类型`，它不包含任何成员函数(不过可以定义函数指针)，没有所谓的属性访问权限(public|private等)。
+
+在面向对象中，struct和class区别不大。
+
+class 中存在this指针，struct中不存在。
+class关键字可以用来做模版，struct关键字不行。
+![](./c_plus_exp_pic/2.png)
 
 
 
