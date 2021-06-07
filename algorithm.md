@@ -71,4 +71,29 @@ public:
 
 思路:  (rand7()-1)*7 + rand7() 是相同概率。
 
-### 
+### 206与92. 反转链表和反转部分链表
+
+其中206思路: 只需要定义3个游动指针，循环以cur为条件，留意nxt是否为空，返回pre即可。
+其中92思路: 同样定义3个游动指针，循环以cur为条件，注意前后区间关系。
+
+### 160. 相交链表
+
+思路: cur1在l1链表上游走，cur2在l2链表上游走，如果发现cur1和cur2相同，返回true即可，如果l1和l2结束了，分别对换，cur1在l2上游走，cur2在l1上游走，直到结束没有找到相同的直接返回即可。
+
+记: left和right为不同的循环条件，结束时两者必定相同，不是nullptr就是答案。
+
+```C++
+ListNode* reWrite(ListNode* headA, ListNode* headB){
+    if (!headA || !headB)
+        return nullptr;
+    ListNode* left = headA;
+    ListNode* right = headB;
+    /* 找到相同节点即可返回 */
+    while ( left != right ){
+        left = left ? left->next : headB;
+        right = right ? right->next : headA;
+    }
+    /* 如果找到的不是相同节点，left和right也会因为nullptr相同而停下循环 */
+    return left;
+}
+```
