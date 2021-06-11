@@ -251,6 +251,58 @@ typedef struct AVCodecContext{
 };
 ```
 
+### 关于AVFrame结构体
+
+其中比较重要的结构体成员
+
+```C++
+// 源码中是这样定义的
+#define AV_NUM_DATA_POINTERS 8 
+uint8_t *data[AV_NUM_DATA_POINTERS]; // 解码后的原始数据
+/* 当存储packed格式数据，如RGB24等等会直接存储在data[0]里面 */
+/* 当存储planar格式数据时如YUV420P会在data[0]中存储Y, data[1]中存U
+    data[2]中存V
+ */
+
+/* data中一行数据的大小，需要根据具体format进行计算 */
+/* 对于ARGB8888格式的为 width * 4 */
+int linesize[AV_NUM_DATA_POINTERS]; 
+
+int width, height; // 宽高
+
+int nb_samples; // 音频中的一个AVFrame中可能有多个音频帧，此成员表示有几个
+
+int format; // 解码后的格式，如YUV420, YUV422, RGB24, RGB32等
+
+int key_frame; // 是否是关键帧
+```
+
+```C++
+/* 其中对于结构体的操作函数 */
+
+/* 申请AVFrame结构体空间，这里只包含了结构体，其中的图像数据pinter还是null的 */
+AVFrame* av_frame_alloc();
+
+/* 申请AVFrame中所指向的图像数据的空间，这里需要提前设置frame的各种参数后才能获取
+align是属于对齐，和frame中的linesizec差不多
+ */
+av_frame_get_buffer(AVFrame* frame, int align);
+
+/* 销毁frame结构体，并且减少一个data的引用计数 */
+av_frame_free(AVFrame** frame);
+```
+
+由于频繁的复制图像数据将使得生成帧或者渲染时间的时间降低，所以要避免频繁的复制相同的数据，所以ffmpeg内部采用某些数据共享的方式来进行操作，通过ref引用来`共用`数据，其中维护着一个引用计数，最后一个被free的AVFrame结构体负责销毁共享的数据。
+
+```C++
+/* dst中的结构体使用和src中相同的图像数据，这个操作将使得data数据中的引用计数+1 */
+av_frame_ref(AVFrame* dst, AVFrame* src);
+
+/* 查看引用计数数量，这个操作是原子的，但是作用并不大
+当这条函数执行后还是有概率会被其他线程free掉数据导致计数是错误的
+ */
+av_buffer_get_ref_count(const AVBufferRef* buf);
+```
 
 
 
