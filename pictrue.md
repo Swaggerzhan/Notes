@@ -1,4 +1,4 @@
-# 图像的存储方式
+# AVFrame
 
 图像有较多存储方式，其中比较常见的比如RGBA，BGRA，ARGB，AGBR以及YUV等。
 
@@ -115,6 +115,61 @@ int av_frame_copy(AVFrame* dst, const AVFrame* src);
 void av_frame_move_ref(AVFrame* dst, AVFrame* src);
 ```
 将src中的数据移动到dst中，需要提前申请好dst的空间，并且需要进行空间释放，防止内存泄漏。并且调用后src中的数据将被复位。
+
+# AVPacket
+
+FFMPEG从H264或者H265文件中读取到的数据将存储在AVPacket中，AVPacket的数据量相比AVFrame少很多，但是也采用了类似的方式来存储数据。
+
+```C++
+AVPacket* packet = av_packet_alloc(); // 申请AVPacket结构体空间
+av_packet_free(AVPacket** pkt); // 清除AVPacket结构体空间
+```
+
+`av_packet_alloc()`只申请AVPacket结构体空间，其中不包括真正的数据空间。AVPacket需要使用`av_packet_free()`清除AVPacket结构体空间。
+
+AVPacket结构体中比较重要的成员: 
+
+```C++
+typedef struct AVPacket{
+    AVBufferRef* buf; // 引用计数的实现
+    int64_t pts;
+    int64_t dts;
+    uint8_t *data;
+    int size;
+    int stream_index;
+    int flags;
+    AVPacketSideData *size_data;
+    int side_data_elems;
+    int64_t duration;
+    int64_t pos;
+}AVPacket;
+```
+
+### * <font color=F0000> AVBufferRef* buf </font>
+
+和AVFrame一样，`AVPacket`采用数据和结构体分开存储的方式，这种方式可以使得多个AVPacket共享同一个H264/H265数据， __当一个AVPacket被释放的时候，真正的数据并不会被释放，数据被释放取决于引用这个数据的AVPacket的数量，只有当最后一个AVPacket被释放的时候，数据才会被释放__ ，而这个`AVBufferRef* buf`成员就是用来实现这个功能的。
+
+### * <font color=F0000> int64_t pts, dts </font>
+
+pts和dts都是一种时间戳，pts表示帧显示时间，dts表示帧解码时间，他们都是以time_base为时间单位，pts必定大于等于dts，图像必定是先被解码后显示的。
+
+在没有B帧的情况下，pts和dts时间一般都是一致的。
+
+### * <font color=F0000> uint8_t *data 和 int size </font>
+
+`data`是AVPacket所指向的真实数据，H264/H265解码后的数据就存储在此，这个空间没有明确的申请函数，包含解码的函数一般都会自动申请这个空间，所以当AVPacket需要使用其他数据时，记得使用`av_packet_unref`来减少data的引用计数来清空内存，由于`data`的数据是H264/H265数据，其大小一般不大，发生内存泄漏时不容易发现。
+
+`size`表示`data`的大小。
+
+### * <font color=F0000> int stream_index </font>
+
+一个视频媒体中一般包含着Video、Audio和字幕等等，所以需要`stream_index`来区分当前AVPacket是属于哪个流的。
+
+### * <font color=F0000> int64_t duration 和 int64_t pos </font>
+
+`duration`用来表示数据的时长，以time_base为时间单位。
+
+`pos`表示本AVPacket在媒体流中的字节偏移量。
 
 
 
