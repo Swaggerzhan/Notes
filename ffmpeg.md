@@ -122,7 +122,7 @@ int avcodec_close(AVCodecContext *avctx); // 关闭
 
 
 
-### 2. 结构体
+## 2. 结构体
 
 所有结构体大致是这种关系
 ![](./ffmpeg_pic/1.png)
@@ -133,7 +133,7 @@ int avcodec_close(AVCodecContext *avctx); // 关闭
 `AVFrame`: 储存非压缩的数据(视频对应RGB/YUV像素数据，音频对应PCM采样数据)。
 `AVPacket`: 储存压缩数据(视频对应H.264等码流数据，音频对应AAC/MP3等码流数据)。
 
-AVFormatContext结构体内容(简略)
+### AVFormatContext结构体中比较重要的部分
 
 ```C++
 typedef struct AVFormatContext{
@@ -145,8 +145,10 @@ typedef struct AVFormatContext{
     char filename[1024]; // 文件名
     int bit_rate; // 比特率(单位bps，转换为kbps除以1000)
     int64_t duration; // 时长(单位:us,1x10^6次方)
-    enum CodecID video_codec_id;
-    enum CodecID audio_codec_id;
+    enum CodecID video_codec_id; // 强制视频解码器ID
+    AVCodec* video_codec; // 强制视频解码器，解封装时由用户设置
+    enum CodecID audio_codec_id; // 强制音频解码器ID
+    AVCodec* audio_codec; // 强制音频解码器，解封装时由用户设置
     AVDictionary *metadata; // 元数据 -------|
 };                                          |
         |-----------------------------------|
@@ -155,8 +157,27 @@ typedef struct AVDictionaryEntry{
     char *key;
     char *value;
 } AVDictionaryEntry;
-
 ```
+
+##### <font color=F000> 整个AVFormatContext是解封装(mp4,flv,avi...)的上下文，FFMPEG许多函数调用都需要用到这个参数。 </font>
+
+### * <font color=F0000> AVInputFormat和AVOutputFormat </font>
+
+AVInputFormat是视频输入的封装格式，仅解封装使用，由avformat_open_input设置
+
+AVOutPutFormat为视频输出封装格式，仅封装使用。
+
+### * <font color=F0000> AVIOContext* bp </font>
+
+I/O上下文
+
+### * <font color=F0000> unsigned int nb_streams和AVStream** streams </font>
+
+streams数组表示流，而且nb_streams表示整个数组中存在多少条流，如音频流或则视频流等等，AVStream结构体中又有许多结构，如对应流的解码/编码上下文等等。
+
+### * <font color=F0000> int64_t duration和int64_t bit_rate </font>
+
+duration表示每帧的持续时间，而bit_rate表示比特率。
 
 AVIOContext结构体(简略)
 
@@ -304,6 +325,20 @@ av_frame_ref(AVFrame* dst, AVFrame* src);
 av_buffer_get_ref_count(const AVBufferRef* buf);
 ```
 
+
+# FFMPEG在MacOS上比较常用的命令
+
+打印所有可用输入设备
+
+```shell
+ffmpeg -f avfoundation -list_devices true -i "" 
+```
+
+抓取index为0的摄像头并播放
+
+```shell 
+ffplay -f avfoundation -framerate 30 -i "0"
+```
 
 
 
