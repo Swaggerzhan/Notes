@@ -6,15 +6,17 @@
 
 NALU之间通过`0x00 0x00 0x01`或者`0x00 0x00 0x00 0x01`进行分割，每个NALU拥有其NALU header，其中记录了一些关于NALU的信息， __NALU header占用1Bytes__ 。
 
-#### * forbidden_zero_bit
+### NALU Header头一个字节具体表示
+
+#### * forbidden_zero_bit(1bit)
 
 占用一个bit，为0表示该NALU正常，为1表示在传输过程或者某种情况下此NALU发生了错误，解码器发现NALU为1将抛弃该NALU。
 
-#### * nal_ref_idc
+#### * nal_ref_idc(2bit)
 
 占用2个bit，表示该NALU的重要性，值越大，重要性越大，当解码器忙不过来时会丢弃值为0的NALU。
 
-#### * nal_unit_type
+#### * nal_unit_type(5bit)
 
 占用5个bit，表示该NALU类型，其中比较重要的
 
