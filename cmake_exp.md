@@ -1,4 +1,4 @@
-# CMAKE EXP
+# CMAKE
 
 ### 1.初始化
 
@@ -60,3 +60,24 @@ find_package(ffmpeg require)
 ### 5. Cmake中一些变量
 
 __CMAKE_BUILD_TYPE__ cmake编译生成的可执行文件的类型，`Release`使用优化，且不含调试符号。`Debug`不使用优化，包含调试符号，RelWithDebInfo使用少量优化，含调试符号。 
+
+# MakeFile
+
+makefile的简易规则
+
+```makefile
+target ... : prerequisites ...
+ command
+ ...
+ ...
+```
+
+target 是一个目标文件，也可以是一个可执行文件，还可以是一个标签。
+prerequisites 是依赖条件
+command 该target要执行的命令
+
+<font color=F0000>makefile的核心是一个依赖关系，target依赖于prerequisites，而生成的方式则由command定义。 </font>
+
+
+
+
