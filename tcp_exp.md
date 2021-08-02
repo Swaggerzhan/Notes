@@ -90,7 +90,7 @@ __144~159 bit__ `总共16bit`: __紧急指针__ ，是一个加到seq上的一�
 
 > ### 2.2 TCP连接
 
-TCP的三次"握手"。
+#### TCP的三次"握手"。
 
 ![](./tcp_pic/3.png)
 
@@ -104,11 +104,11 @@ __第三步__ : 客户端收到第二个包后立刻改变状态为`ESTABLISH`�
 
  __SYN报文是安全的，每发送一个SYN报文就会将seq+1，如果出现丢失情况，则SYN段会重传__ !
 
-#### * 问题1: 如果是2次握手会发生如何?
+问题1: 如果是2次握手会发生如何?
     
 这里我们假设一个条件，有一个客户端A和一个服务器B，如果A发送了一个SYN包，但是这个包由于某种场合它延迟到达了B，B是服务器，它同意进行连接，直接将自己状态改变为ESTABLISH，但是当B发出的SYNACK包到达客户端A后，客户端A认为上次发送的SYN包已经失效了，所以丢弃了SYNACK包。结果就是服务器傻傻的等待客户端，造成资源浪费。
 
-TCP的四次"挥手"。
+#### TCP的四次"挥手"。
 
 ![](./tcp_pic/4.png)
 
@@ -130,9 +130,9 @@ __第四步__ : 客户端收到这个包后，生成一个包，我们先称为�
 
 __服务器应减少或者避免主动关闭连接，过多的`TIME_WAIT`占用端口在高并发情况下将是灾难性的__ 。
 
-## 3. 系统调用
+## 3. TCP相关系统调用
 
-#### * send系统调用
+#### * send 系统调用
 
 ```C++
 // 向fd指向的管道发送数据，数据长度为len，flag为0时和write基本无差异
@@ -160,7 +160,7 @@ send的和write有许多相同之处，只不过send更多用于socket套接字�
 <font color=F0000>所以可以得出结论，send返回不代表对方已经收到信息了！如果是非阻塞情况，send返回时，协议栈正在努力的发送数据到对方的协议栈上，而对方用户层可能还未调用read或者recv来读取对应的数据呢，如果在阻塞情况下，有可能部分数据已经到达对方，但是具体对方读取了多少还是不从而知！如果非要确切的知道对方是否收到，需要做用户层面的ack机制才可。</font>
 
 
-#### * sendto系统调用
+#### * sendto 系统调用
 
 ```C++
 // sendto用于UDP类的socket(SOCK_DRAM)
@@ -173,7 +173,7 @@ int sendto(int s, const void* msg, int len, int flags,
 
 当调用系统sendto时，操作系统即刻将对应的数据发送出去，并返回，如果需要做对方确认收到的情况，需要在用户层做ack。
 
-#### * recv系统调用
+#### * recv 系统调用
 
 ```C++
 size_t recv(int fd, const char* buf, size_t len int flags);
@@ -186,7 +186,7 @@ recv函数和send函数相反，recv将内核协议栈中的数据复制到用�
 
 <font color=F0000> 这里涉及到一个TCP知识，当recv迟迟不被调用时，接收缓冲区上将充满数据，tcp的拥塞控制将使得其发送一个移动窗口使用情况到对端，建议对方停止发送数据，如果对端继续发送，当缓冲区数据已容纳不下时，TCP将选择抛弃对应的数据包。 </font>
 
-#### * recvfrom系统调用
+#### * recvfrom 系统调用
 
 ```C++
 size_t recvfrom(int fd, const char* buf, size_t len, int flags,
@@ -198,4 +198,62 @@ recvfrom和sendto一样都是用于SOCK_DRAM形式的套接字，即UDP。
 
 * 阻塞模式下: recvfrom会阻塞，直到内核缓冲区中有一个完整的UDP包即返回。
 * 非阻塞模式下: recvfrom即可返回，如果有完整UDP包，返回对应包长度，没有数据则返回-1并且设置errno，一般为EAGAIN。
+
+
+#### * listen 系统调用
+
+```C++
+int listen(int sockfd, int backlog);
+```
+
+listen函数一般用于服务器，它将一个socket设定为监听套接字，表示这个套接字将等待客户端连接，但是这里有些许的误会，就是listen并没有参与三次握手，即使accept也没有参与3次握手，服务器端的三次握手实现另有其人。
+
+我们注意到listen函数有一个backlog参数，它是一个总数，一般为5，告诉内核连接队列的长度。
+
+之前的介绍中有说到，服务器在三次握手中如果返回第一个包的ack将切换状态至 `SYN_RECV` 收到客户端的ack后将转换状态为 `ESTABLISH` 。这里有2个状态，内核有2个队列来保存这两个状态的连接，`SYN_RECV`的为半连接状态，`ESTABLISH`是连接完成的状态(accept还未接管)，它们的总数为backlog。
+
+
+#### * accept 系统调用
+
+```C++
+int accept(int sockfd, struct sockaddr* addr, socklen_t *addrlen);
+```
+
+accept函数做的是将内核中的 __TCP连接完成队列__ 中的队列头取出，并返回一个真正的用于传输的套接字，并且accept也有阻塞和非阻塞之分。
+
+* 阻塞模式下: accept获取TCP连接完成队列的队列头，然后返回。如果队列为空，则阻塞，直到有新元素后返回。
+* 非阻塞模式下: 如果队列中有元素，则获取后返回，如果为空，则即可返回-1，并且设置errno，一般为EAGAIN。
+
+accept返回后，将得到一个新的socket，之后对这个客户端的读写都通过此socket进行，此socket是服务器内核生成的，其根本就是一个文件描述符(socket文件描述符)。
+
+对于一些小疑问，比如服务器是如何区分不同客户端的，客户端和服务器发起多TCP连接如何区分不同连接等，这是因为TCP是使用四元组来进行区分的，即( __服务器地址，服务器端口，客户端地址，客户端端口__ )。
+
+#### * connect 系统调用
+
+```C++
+int connect(int sockfd, struct sockaddr* name, size_t namelen);
+```
+
+connect函数用于发起tcp连接，sockfd是一个socket类型的文件描述符，发起connect系统调用后，TCP4元组就已经确定，如果没有提前调用bind，则将由内核随机选择客户端端口进行连接。
+
+connect函数真正的参与了TCP的三次握手(调用了更底层的握手函数，如果是阻塞情况可以大致看成它完成了三次握手)，同样有阻塞和非阻塞的调用方式。
+
+* 阻塞模式下: connect发起TCP请求，期间connect不返回，直到服务器返回一个ACK后即返回(内核做的TCP三次握手)。
+* 非阻塞模式下: connect发起TCP情况，立刻返回-1，并且设置errno为EINPROGRESS表明TCP连接进行中，之后TCP三次握手将由内核来完成。再次调用connect，如果握手成功，则返回对应文件描述符，如果进行中则返回-1设置errno为EINPROGRESS，失败则返回-1并设置对应errno。
+
+由于TCP连接的特性，对于一些网络复杂情况，阻塞connect可能需要用非常长的时间，所以建议使用非阻塞connect，在TCP连接期间可以做一些其他的事情。
+
+#### * bind 系统调用
+
+```C++
+int bind(int sockfd, struct sockaddr* addr, size_t addrlen);
+```
+
+主要用于服务器，将一个对应的socket文件描述符绑定到一个固定的地址和端口上，失败返回-1。服务器在调用listen前需要调用bind来固定一个端口。
+
+如果是客户端则没有这个必要，客户端在调用connect函数的时候，内核将自动分配一个端口用于传输数据，一般为10000+的端口，如果调用了bind，connect将使用固定好的这个端口进行请求。
+
+
+
+
 
