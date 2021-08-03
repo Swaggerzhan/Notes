@@ -768,8 +768,106 @@ int main(){
 
 关于循环引用的问题: 当对象A和对象B分别存有对方的shared_ptr时会发生的事情，如果发生了循环引用，会导致内存不被释放，进而产生内存泄漏。解决的方式就是一方使用weak_ptr，weak_ptr不会使引用数量增加，当需要使用的时候采用lock()或者expire来判断指针是否过期，之后再进行使用指针的操作。
 
+### 10. lambda表达式
 
-### 10. 一些面试题目
+基础使用
+
+```C++
+auto add = [] (int a, int b) -> int { return a + b; }
+```
+
+lambda表达式以 `[]` 符号开始，如果有函数有参数，则加上括号，在其中加入形参即可，至于返回值，如果没有返回值直接接上 `{}` 符号，在其中写函数体，如果有返回值，则接 `->` 符号，后接具体返回值，当然你也可以让它自动推导，但不建议这样做。
+
+```C++
+auto add = [] (int a, int b) {return a + b;} // 自动推导
+```
+
+lambda表达式具体得到的东西是一个类，更具体说是一个仿函数的类，它可以直接使用 `()` 来进行调用函数。
+
+lambda表达式更多的使用来实现闭包的东西，如: 
+
+```C++
+int target = 10;
+/* 捕获target */
+auto add = [target] (int x) -> int {return x + target};
+```
+
+以上的代码其实就是声明一个仿函数，仿函数中有一个对象变量target，它是`const`的形式，也就是说你无法在lambda表达式中改变它的值，但你也可以使用`mutable`修饰，强行修改其值。
+
+```C++
+int target = 10;
+auto add = [target] (int x) mutable -> int{
+    target += 10;
+    return target + x;
+};
+```
+
+lambda不仅可以使用普通捕获的方式，也可以使用引用捕获，他将在闭包内的修改结果带出闭包。
+
+```C++
+int target = 10;
+auto add = [&target] (int x)mutable -> int {
+    target = 100; // 将导致外层target值变为100
+    return target + x;
+};
+```
+
+lambda捕获的各种方式
+
+* `[]`      : 不捕获任何变量
+* `[=]`     : 使用 __值__ 的方式捕获 __所有变量__
+* `[&]`     : 使用 __引用__ 的方式捕获 __所有变量__
+* `[x]`     : 使用 __值__ 的方式捕获 __x__
+* `[&x]`    : 使用 __引用__ 的方式捕获 __x__
+* `[=, &x]` : 使用 __值__ 的方式捕获 __所有变量__ ， __x使用引用捕获__
+* `[&, x]`  : 使用 __引用__ 的方式捕获 __所有变量__ ， __x使用值捕获__
+* `[this]`  : 使用 __引用__ 方式捕获(指针)
+* `[*this]` : 使用 __值__ 方式捕获
+
+<font color=F0000> 注意: 不建议捕获所有值，使用引用的方式或者指针的方式进行捕获可能会导致悬挂指针的情况！并且在类中捕获值的方式所有变量使用的是this指针，所以还是可能出现悬挂指针！！ </font>
+
+```C++
+class Test{
+public:
+    Test();
+    ~Test();
+    std::function<int(int)> func(){
+        /* 其实使用的是this指针捕获类变量value_ */
+        /* 会出现悬挂指针！                   */
+        return [=](int a) -> int {return a};
+    }
+private:
+    int value_;
+};
+```
+
+泛型lambda其实更简单，直接使用auto变量即可
+
+```C++
+auto add = [] (auto a, auto b){return a + b;};
+```
+
+lambda捕获右值引用
+
+留空。。。。
+
+
+完整语法: 
+
+```C++
+[ capture-list ] (params) mutable(可选) constexpr(可选) \
+exception attribute -> ret { body }
+
+// 简略
+[ capture-list ] (params) -> ret { body }
+[ capture-list ] (params) { body }
+
+```
+
+
+
+
+### 11. 一些面试题目
 
 ##### * malloc free 和 new delete的区别
 
@@ -975,6 +1073,40 @@ Linux下可以使用管道pipe进行通讯。
 共享内存方式。
 
 或者直接使用套接字，但是对于有分布式要求的程序我觉得走网络协议会好点。本地协议不利于分布式。
+
+##### * 多态的体现
+
+多态顾名思义就是多种形态，从C/C++角度来看，多态有静态多态，动态多态两种。
+
+静态多态又分为两种实现方式，首先就是正常的函数重载。
+
+```C++
+int add(int a, int b){
+    return a + b;
+}
+
+double add(double a, double b){
+    return a + b;
+}
+
+int main(){
+    add(1, 2);
+    add(1.1, 2.2);
+}
+```
+
+以上的add构成重载，其次就是使用模板来实现的。
+
+```C++
+template<typename T>
+T add(T a, T b){
+    return a + b;
+}
+```
+
+C++还有动态实现的方式，使用了虚函数来实现，具体内容见虚函数。
+
+
 
 
 
