@@ -79,5 +79,24 @@ command 该target要执行的命令
 <font color=F0000>makefile的核心是一个依赖关系，target依赖于prerequisites，而生成的方式则由command定义。 </font>
 
 
+### 一些小技巧
+
+使用file来包含所有文件
+
+```cmake
+file(GLOB variable [RELATIVE path] [globbing expressions]...)
+```
+
+ 将检索到的文件都加入到variable中去
+ 
+ 例如: 
+ 
+ ```cmake
+ file(GLOB SRC_FILE "*.cc" "path/test_path/*.cc")
+ ```
+ 
+ 则将path/test_path/下的所有.cc文件都加入到变量SRC_FILE中去。
+
+
 
 
