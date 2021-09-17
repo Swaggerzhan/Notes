@@ -74,6 +74,20 @@ int main () {
 }
 ```
 
+### protoc
+
+protoc编译器编译proto文件生成对应语言可用的包
+
+```shell
+protoc --proto_path=基础目录 --cpp_out=目标目录 源文件
+```
+
+例如
+
+```shell
+protoc --cpp_out=src src/person.proto
+```
+
 
 
 
