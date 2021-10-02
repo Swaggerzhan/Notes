@@ -1,69 +1,104 @@
-# ucontext
+# routine
 
-在glibc中有一个头文件，定义了4个系统调用，分别是getcontext,setcontext,swapcontext,makecontext。
+协程，是一种可以在用户态调度的一种轻量级线程，由于用户态间的调度快，所以比线程轻量，接下来将使用汇编来实现一些简单的用户态上下文切换，具体[汇编语法](./assemble.md) 。
 
-### getcontext
+### 寄存器
+
+寄存器是上下文切换的时候必定要保存的，当切换回来的时候，回复寄存器中的值从而重新从切换前的位置再次开始运行。
+
+其中有8个寄存器一定要存起来，用于后续恢复使用。除此之外，我们还需要保存每个协程的堆栈信息，这里我们使用的是申请堆上内存作为栈使用，默认为128k。
 
 ```C++
-int getcontext(ucontext_t *ucp);
+struct _Rroutine{
+    void* reg_rbx;
+    void* reg_rsp; // 栈顶寄存器
+    void* reg_rbp; // 栈底寄存器
+    void* reg_r12;
+    void* reg_r13;
+    void* reg_r14;
+    void* reg_r15;
+    void* reg_rip; // 指令寄存器
+};
 ```
 
-这里ucontext_t需要提前申请内存空间。getcontext主要的用途是将当前上下文保存到ucp中去。
+这样，我们就可以简单的写出一个上下文保存的汇编函数，在C语言中，我们将其定义为`void swap_context(void* out, void* in);`，如果调用成功，那么函数将不会返回，将直接跳转到in的上下文中去执行，并且会将当前的上下文保存至out中。
 
+```asm
+# swap.s
+.section .text
+.type swap_context @function
+.globl swap_context
 
-### makecontext
+swap_context:
+    mov 0x00(%rsp), %rdx # rip
+    lea 0x08(%rsp), %rcx # rsp
+    mov %rbx, 0x00(%rdi)
+    mov %rcx, 0x08(%rdi)
+    mov %rbp, 0x10(%rdi)
+    mov %r12, 0x18(%rdi)
+    mov %r13, 0x20(%rdi)
+    mov %r14, 0x28(%rdi)
+    mov %r15, 0x30(%rdi)
+    mov %rdx, 0x38(%rdi)
 
-```C++
-void makecontext(ucontext_t *ucp, void(*func)(), int argc, ...);
+    mov 0x00(%rsi), %rbx
+    mov 0x08(%rsi), %rsp
+    mov 0x10(%rsi), %rbp
+    mov 0x18(%r12), %r12
+    mov 0x20(%r13), %r13
+    mov 0x28(%r14), %r14
+    mov 0x30(%r15), %r15
+    jmpq *0x38(%rsi)
 ```
 
-makecontext并不是真正的make出来一个context，它需要去修改getcontext后得到的上下文，也就是说需要在getcontext调用后才可使用，并且，makecontext之前我们还需要设置一下这个`context`中的栈信息，以及后继上下文。
-
-### setcontext
-
 ```C++
-int setcontext(ucontext_t *ucp);
-```
+#include <cstdlib>
+#include <iostream>
 
-将ucp中保存好的各种上下文赋值到目前的寄存器中，如果这个函数调用成功，那么将不再返回了，进而去运行ucp上下文中的eip。
+extern "C" void swap_context(void*, void*);
 
-### swapcontext
+typedef struct _Rroutine{
+    void* reg_rbx;
+    void* reg_rsp; // 栈顶寄存器
+    void* reg_rbp; // 栈底寄存器
+    void* reg_r12;
+    void* reg_r13;
+    void* reg_r14;
+    void* reg_r15;
+    void* reg_rip; // 指令寄存器
+} Routine;
 
-```C++
-int swapcontext(ucontext_t *oucp, *ucontext_t *ucp);
-```
+Routine main_ctx, child_ctx;
 
-swapcontext会直接保存当前的上下文到oucp中去，然后直接将ucp中的上下文赋值到寄存器中，进而转过去运行ucp中的eip，调用成功的话将不会返回。
+void func(){
+    printf("Wait\n");
+    swap_context(&child_ctx, &main_ctx);
+    printf("Wait2\n");
+    swap_context(&child_ctx, &main_ctx);
 
-
-### 例子
-
-```C++
-void func1(){
-    cout << "func1" << endl;
 }
 
-int main(){
-    char* stack = (char*)malloc(1024 * 128);
-    ucontext_t child,main; // 主协程上下文和子协程上下文
-    getcontext(&child); // 保存当前的上下文
-    child.uc_stack.ss_sp = stack; // 设置栈空间
-    child.uc_stack.ss_size = 1024 * 128; // 栈空间大小
-    child.uc_stack.ss_flags = 0;
-    child.uc_link = &main;  // 后继上下文
-    
-    makecontext(&child, (void (*)(void))func1, 0); // 修改之前get到的上下文
-    // 将当前上下文写到main中去，然后应用之前保存的child上下文
-    swapcontext(&main, &child);
-    cout << "main" << endl;
+int main() {
+    void* stack = malloc(1024 * 1024 * 10);
+    // 栈的空间从高向下生长
+    child_ctx.reg_rsp = (void*)((char*)stack + 1024 * 1024 * 10);
+    child_ctx.reg_rip = (void*)func;
+    swap_context(&main_ctx, &child_ctx);
+    printf("Resume\n");
+    swap_context(&main_ctx, &child_ctx);
+    return 0;
 }
 ```
 
-运行得到
+使用命令行
 
 ```shell
-func1
-main
+$ as swap.s -o swap.o
+$ g++ -g main.cc swap.o
+$ ./a.out # 运行得到结果
+Wait
+Resume
+Wait2
 ```
 
-程序运行到getcontext时候将上下文保存到了child中去，之后makecontext将上下文中的eip修改为了func1()，最后使用swapcontext进行上下文交换，首先我们先将这里的上下文保存到main中，然后使child中的上下文生效，程序跳转到对应的func1中运行，打印出了func1，当func1结束后，由于uc_link被设定为了main这个上下文，程序跳转到我们之前保存的main中去，也就是swapcontext的下一行代码，进而打印出了main这个字符串。
+至此，一个比较简单的上下文保存切换就完成了。
