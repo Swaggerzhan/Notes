@@ -79,7 +79,7 @@ typedef struct {
 
 ```shell
 readelf -S ./a.out # -S 表示查看Section Header Table
-readelf -s ./a.out # 小s则表示查看每个节的信息
+readelf -s ./a.out # 则表示查看符号解析表，即.symtab类似节的具体信息
 ```
 
 我们这里以可运行文件进行分析，一个可运行文件要可以运行，肯定需要保存有一系列代码以及数据等等，为了正确的保存这些代码以及数据，ELF文件中有着一个个的节(Section)又或者称之为段(Segment)的分区，程序编译完的汇编数据一般放在代码段(常见的代码段有.code或者.text，不同的编译器有不同的编译方式)，而数据则一般放到数据段(常见的有.data)。
