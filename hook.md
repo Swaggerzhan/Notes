@@ -133,6 +133,65 @@ int main() {
 
 由此生成对应可执行文件，我们即可运行，这种方法和一开始的方法有所不同，不用使用头文件也可以调用对应函数。接下来就可以进行一些hook相关的操作了。
 
+### 劫持fgets函数
+
+先看一下fgets函数
+
+```C++
+char* fgets(char* str, int n, FILE* stream);
+```
+
+写一个简单的读取输入的程序
+
+```C++
+// main.cc
+#include <cstdio>
+#include <cstdlib>
+
+int main(){
+    char buf[50];
+    fgets(buf, 50, stdin);
+    return 0;
+}
+```
+
+这是一个很简单的程序，其调用`libc.so.6`动态链接库中的fgets函数，现在通过之前dlsym将其hack掉。
+
+```C++
+// hook.cc
+#include <dlfcn.h>
+#include <cstdlib>
+#include <cstdio>
+typedef char*(*FGETS)(char*, int, FILE*);
+
+char* fgets(char* str, int n, FILE* stream){
+    void* func = dlsym(RTLD_NEXT, "fgets");
+    if ( func == nullptr ){
+        return nullptr;
+    }
+    printf("you hooked!\n");
+    return ((FGETS)(func))(str, n, stream);
+}
+```
+
+通过hook.cc文件中，可以看到我们使用`dlsym`来寻找下一个动态链接库中的`fgets`函数，使用的是`RTLD_NEXT`来进行寻找，那么问题来了，如果我们直接使用命令行来生成对应的libhook.so文件就行了么？
+
+```shell
+g++ -o libhook.so -fpic -shared -ldl
+```
+
+运行发现根本没有跳转到我们想要的fgets函数，这是由于libhook.so并不是当前程序的首要链接库，既然我们要通过`RTLD_NEXT`来寻找真正的fgets，那就首先要将我们创建的动态链接库放到第一位，或者说优先加载才行。
+
+##### LD_PRELOAD
+
+使用环境变量`LD_PRELOAD`指定的动态链接库，可以优先的将其加载到程序中去，不过这里不建议直接这样做，会污染当前的环境变量的，建议写到一个`.sh`文件中另起一个进程来做比较好。
+
+使用export命令加载优先的动态链接库后再运行程序就可发现fgets函数已被劫持了。
+
+```shell
+export LD_PRELOAD=/root/hook/libhook.so
+./a.out
+```
 
 
 
