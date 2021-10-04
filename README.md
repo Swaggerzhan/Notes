@@ -23,3 +23,5 @@ C++学习经验 [C++](./C_plus_exp.md)
 [汇编语言](./assemble.md)
 
 [协程实现](./croutine.md)
+
+[C/C++的链接与装载是如何实现的](./Link.md)
