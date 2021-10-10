@@ -203,6 +203,33 @@ execve()内部又会调用do_execve()，do_execve()会检查输入文件的前12
 
 以上就是不同模块间的数据和函数访问方式，均可以通过GOT来实现。
 
+#### 延迟绑定(Lazy Binding)
+
+如果直接使用GOT表来做链接时重定位，那当然非常简单，只不过问题时， __当一个程序装载时做重定位，如果符号非常多，就会使得程序运行的非常的慢，所以Linux使用了一个延迟绑定的方法来做，通过在GOT表中再添加一个中间表PLT来实现(Procedure Linkage Table)__ 。
+
+比如调用一个简单的func函数，则汇编会这样写
+
+```asm
+    call func@plt
+############### func@plt #############
+func@plt:
+    jmp *(func@got)
+    push n
+    push moduleID
+    jump _dl_runtime_resolve
+```
+
+动态链接库在初始化时，会讲func@got处的表的`push n`的地址，也就是`jmp *(func@got)`的下条指令地址，这样以来，完整的调用过程就是这样的：
+
+* 第一次调用func函数，call func@plt，跳转到`jmp *(func@got)`
+* func@got处是push n的地址
+* 执行`push n`和`push moduleID`
+* 通过`dl_runtime_resolve`解析func地址，并将地址写到`func@got`上
+* 重新调用func@plt，之后由于`func@got`已是真正的函数了，所以不必再解析符号了
+* 接下来的后续调用都直接会跳转到`func@got`上
+
+
+
 
 
 
