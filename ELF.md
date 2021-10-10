@@ -36,7 +36,11 @@
 
 其中第一个字段e_ident我们称之为魔数，接下来解析比较重要的字段。
 
+`e_entry`即入口，表示ELF文件装载后的程序入口。
+
 `e_shoff`全名`Section Header Table Offset`即节头表偏移，这个字段的意思是表明 __节头表在整个文件中的偏移量__ 。
+
+`e_phoff`全名`Program Header Table Offset`即程序头表偏移， __程序装载时起左右，后续解释__ 。
 
 `e_shnum`全名`Section Header Table number`即节头表的数量，表明整个ELF文件中， __关于节头表中的成员一共有多少个__ 。
 
@@ -206,5 +210,41 @@ __对于data放到哪个节上面去，这里引出一个符号概念，即Stron
 ```C
 "data_1\0data_2\0data_3\0func1\0func2\0" // 类似如此
 ```
+
+### 4. Program Header Table
+
+程序头表是装载时用到的表结构，在ELF Header中字段为`e_phoff`，即`Program Header Table offset`表示程序头在文件中的偏移量，此表中的信息就是在装载时起作用。
+
+如果一个ELF文件为目标文件，那么不需要程序头表，这是因为目标文件根本无法执行，如果是一个可执行文件或者是动态链接库，则必有程序头表。
+
+这个`e_phoff`指向的一个结构体数组，其结构体Elf32_Phdr定义如下
+
+```C++
+typedef struct {
+    Elf32_Word  p_type;
+    Elf32_Off   p_offset;
+    Elf32_Addr  p_vaddr;
+    Elf32_Addr  p_paddr;
+    Elf32_Word  p_filesz;
+    Elf32_Word  p_memsz;
+    Elf32_Word  p_flags;
+    Elf32_Word  p_align;
+} Elf32_Phdr;
+```
+
+`p_type`故名思义，用于区分段类型，其中有 `LOAD`，`DYNAMIC`，`INTERP`等。
+
+`p_offset`即段在文件中的偏移量。
+
+`p_vaddr和p_paddr`都是一个地址，当段被加载时，就是从这个地址开始的，分别为虚拟地址和物理地址，正常情况下它们俩是一样的。
+
+`p_filesz`表示长度，从p_offset开始的长度，都为此段需要加载内容。
+
+`p_memsz`也表示长度，这个长度是加载到内存中的长度，和filesz有所不同。
+
+`p_flags`则用于表示权限，如`RWX`分别表示读写执行权限。
+
+`p_align`对齐，对齐字节为2的p_align次。
+
 
 
