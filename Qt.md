@@ -2,7 +2,7 @@
 
 
 
-### UI文件
+###  1. UI文件
 
 
 
@@ -67,7 +67,7 @@ private:
 
 
 
-### 信号和槽
+###  2. 信号和槽
 
 这种关系有点类似Linux中的signal和signal handler的关系，槽即位函数嘛，具体定义方式为
 
@@ -110,11 +110,9 @@ private:
 
 
 
-### 一些组件
+###  3. 一些组件
 
-
-
-##### 1. QLineEdit
+* ##### 1. QLineEdit
 
 一个编辑文本的组件，具体的使用函数如下
 
@@ -125,11 +123,11 @@ lineEdit->text();								// 获取一个QString的对象，就是文本中的内
 
 其中， __只有一个信号，那就是文本改变信号`QLineEdit::textChange` __，当文本发生改变时会被触发。
 
-##### 2. QLabel
+* ##### 2. QLabel
 
 一段文本，改变颜色只可以发生在初始化的时候，一旦显示了，就不能再改变了。
 
-##### 3. RadioButton
+* ##### 3. RadioButton
 
 这种是一个互斥的选项，例如选中了A，则B被自动取消。具体使用的一些函数
 
@@ -143,9 +141,7 @@ radioButton->isChecked(); // 标明是否被选中，被选中则为true
 clicked(); // 被点击后的信号
 ```
 
-
-
-##### 5. QSpinBox
+* ##### 4. QSpinBox
 
 这是一个数值的组件，有可以手动输入，也可以通过上下箭头来增减数量，一些函数
 
@@ -162,12 +158,113 @@ QSpinBox::valueChanged(int i);
 QSpinBox::valueChanged(const QString &text);
 ```
 
-* QSpinBox的信号和槽关联方式
+* ##### 5. QSpinBox的信号和槽关联方式
 
 由于`valueChanged`是一个同名的函数，并且有不同参数，在Qt中，这种情况就不能使用函数指针来进行connect了，但可以使用如下的方式进行关联。
 
 ```c++
 // 其中，int将会是这个组件改变后的新值，将被传递到onValueChanged中的int。
 connect(ui->spinBox, SIGNAL(valueChange(int)), this, SLOT(onValueChanged(int)));
+```
+
+* ##### 6. QComboBox
+
+QComboBox是一个下拉列表的组件，可以提供一些列表供用户选择，我们可以通过一系列函数进行增加内容
+
+```c++
+comboBox->addItem(QString); 											// 添加内容
+comboBox->insertItem(int index, QString target);	// 添加到指定的index上
+comboBox->addItems(QStringList);									// 将列表中的元素都加进入
+```
+
+当组件上的选择发生变化时，会发射如下的信号
+
+```c++
+void currentIndexChanged(int index);
+void currentIndexChanged(const QString& text);
+```
+
+* ##### 7. QPlainTextEdit
+
+这是一个多行文本编辑器的组件，
+
+* ##### 8. TableWidget
+
+TableWidget其实就是一个表格，有着行与列，其中的每个元素都可以添加对应的组件，比如我们可以将ComboBox加入到其中，成为一个`cell`，其中，这些表格内容都是可以修改的，如果不想被用户修改，那么可以将权限设定为只读。
+
+```
+tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+```
+
+比较常用的使用函数为
+
+```c++
+/* 添加一个TableWidgetItem的cell到对应的坐标上 */
+tableWidget->setItem(cols, rows, new QTableWidgetItem(str));
+/* 添加一个其他的Widget控件上去，比如ComboBox */
+QComboBox* myBox = new QComboBox();
+tableWidget->addCellWidget(cols, rows, myBox);
+```
+
+* ##### 9. ListWidget
+
+这是一个一列的列表，如图类似这种列表
+
+![](./Qt_pic/1.png)
+
+我们可以选中它，并且会触发一些信号，比如
+
+```c++
+clicked(QModelIndex); // 当被点击时触发
+```
+
+对于这个列表的使用方式有一些函数，比如
+
+```c++
+listWidget->addItem(QString); // 添加列表中的元素
+listWidget->currentRow();			// 当前被选中的索引
+listWidget->currentItem();		// 当前被选中的目标，返回的是一个 QModelIndex的类
+```
+
+
+
+### 4. 一些基础类
+
+
+
+##### * QString
+
+QT中自己定义了一个管理字符串的类，为`QString`，对于这个类，其中并不是保存普通的`char`字符，而是使用了Unicode来进行编码，每一个字符为`QChar`占用16bit，所以用于显示中文是完全没问题的。
+
+有一些比较常用的使用方法，比如
+
+```c++
+int toInt(bool* ok = Q_NULLPTR, int base = 10);
+int toLong(bool* ok = Q_NULLPTR, int base = 10);
+int toShort(bool* ok = Q_NULLPTR, int base = 10);
+int toUInt(bool* ok = Q_NULLPTR, int base = 10);
+int toULong(bool* ok = Q_NULLPTR, int base = 10);
+int toFloat(bool* ok = Q_NULLPTR);
+int toDouble(bool* ok = Q_NULLPTR);
+append(QString target);
+prepend(QString target);
+isEmpty();
+count();
+size();
+length();
+contains();
+```
+
+
+
+##### * QTimer
+
+这是QT中定义的一个定时器，具体使用方法如
+
+```c++
+QTimer* timer = new QTimer(this);
+timer->setInterval(1000); // ms 设定一个超时时间
+timer->start();						// 开始定时
+timer->stop();						// 定时结束 
 ```
 
