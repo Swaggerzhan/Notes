@@ -226,7 +226,9 @@ listWidget->currentRow();			// 当前被选中的索引
 listWidget->currentItem();		// 当前被选中的目标，返回的是一个 QModelIndex的类
 ```
 
+* ##### 10. QDialog
 
+属于一个子窗口，如果被关闭将返回2种信号，分别为`QDialog::Accepted`以及`QDialog::Rejected`，点击窗口上的关闭按钮将返回`QDialog::Rejected`并关闭Dialog组件。
 
 ### 4. 一些基础类
 
@@ -266,5 +268,59 @@ QTimer* timer = new QTimer(this);
 timer->setInterval(1000); // ms 设定一个超时时间
 timer->start();						// 开始定时
 timer->stop();						// 定时结束 
+```
+
+
+
+### 5. IO
+
+首先是本地文件IO的操作，可以使用`QFile`来直接打开文件，并且通过`readLine`来读取一行，或者使用`readAll`来读取全部。
+
+当我们使用`QFile`初始化一个文件类时，使用`open`函数来打开流，并且传入对应的参数，比如`QIODevice::ReadOnly`表示只读，`QIODevice::Text`表示以文本方式打开。
+
+```c++
+QFile file("/tmp/data.txt");
+if ( !file.open(QIODevice::ReadOnly | QIODevice::Text) ){
+  return -1;
+}
+while ( !file.atEnd() ){
+  QString line = file.readLine();
+}
+```
+
+一些比较常用的文件IO以及权限
+
+```c++
+read(qint64 size);
+readALl();
+readLine();
+open(mode);
+close();
+write();
+seek();
+pos();
+atEnd();
+exists();
+QIODevice::ReadOnly;
+QIODevice::WriteOnly;
+QIODevice::ReadWrite;
+QIODevice::Append;
+QIODevice::Truncate;
+QIODevice::Text;
+```
+
+### 6. 线程
+
+Qt中自定义了`Qthread`来起线程，一般采用继承于`Qthread`，并且通过重载虚函数`run`来编写多线程的入口，并且调用`start`来启动线程，`start`将在内部调用`run`函数。
+
+```c++
+class MyThread : public Qthread{
+public:
+  O_OBJECT
+public:
+  Qthread();
+protected:
+  void run() Q_DECL_OVERRIDE;  // 重载run线程任务
+};
 ```
 
