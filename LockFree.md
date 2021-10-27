@@ -57,24 +57,7 @@ bool get(int* ret){
 
 * 多生产者的情况
 
-```
-初始情况:
-	readIndex_ = 0, writeIndex_ = 0, oldWriteIndex_ = 0 队列中无数据
-考虑竞态情况
-生产者线程1:															生产者线程2：
-	通过第一轮CAS														通过第一轮CAS
-	writeIndex = 0													writeIndex = 1
-	writeIndex_ = 1,oldWriteIndex_ = 0			writeIndex_ = 2，oldWriteIndex_ = 0
-	data中添加新数据，位置在data[0]						 data中添加数据,位置在data[1]
----------------------------------------->	无法通过第二轮CAS，由于
-		中断  																oldWriteIndex_ != writeIndex，此时writeIndex = 1
-<-----------------------------------------------------------------------------------------
-	通过第二轮CAS														
-	writeIndex_ = 1,oldWriteIndex_ = 1
-	函数结束
-																					再次检查，发现
-																					oldWriteIndex_已经为1了，此时条件成立，通过第二轮CAS
-																					函数结束
-```
+![](./LockFree_pic/1.png)
 
 即使在以上中断的条件下，有消费者线程尝试获取数据也将以失败告终，消费者以`oldWriteIndex`为同步条件，而不管是生产者线程2亦或者是消费者，都需要等待`oldWriteIndex`的更新才能进行下一步的操作。
+
