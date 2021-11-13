@@ -1,15 +1,41 @@
 # CMAKE
 
-### 1.初始化
+### 1.基本语法
 
-设置一个cmake所需要的最低版本，FATAL_ERROR表示小于此版本为致命错误。
-`cmake_minimun_required(VERSION 3.5 FATAL_ERROR)`
+在`CMakeLists.txt`中，我们可以定义一个最低的版本要求，生成的二进制名，也就是整个项目的名字，比如:
 
-声明项目名字为test1，语言使用C++(CXX)
-`project(test1 LANGUAGES CXX)`
+```cmake
+cmake_minimum_required(VERSION 3.10) # 最低要求3.10版本的cmake
+project(MyProject) # 项目名，也就是最终生成二进制时的名字
+```
 
-将编译出一个名为hello-world的可执行文件，它由hello-world.cpp生成
-__add_executable ( hello-world hello-world.cpp )__
+通过`set`指令，我们可以设定一些必要的参数，具体一些示例:
+
+```cmake
+set(CMAKE_CXX_STANDARD 11) # CXX表示C++ 版本11
+set(CMAKE_BUILD_TYPE DEBUG | RELEASE) # 构建DEBUG或者是RELEASE版本
+```
+
+ 添加源文件到项目中时，我们可以使用`add_executable`。例如:
+
+```cmake
+add_executable(
+	MyProject
+  A.h	A.cpp
+  B.h B.cpp
+) # 表示将其中的文件都添加到二进制MyProject中去
+```
+
+##### 使用一些库文件
+
+一些指令是用于添加库文件的，有对于文件引用，又或者是库引用的。
+
+```cmake
+include_directories(/tmp/include) 		# 引用/tmp/include下的文件
+link_directories(/tmp/lib)						# 引用/tmp/lib下的库，需要配合target_link_libraries
+target_link_libraries(MyProject test)	# 将libtest.so库添加到MyProject中
+																			# /tmp/lib/libtest.so
+```
 
 
 ### 2. 生成静态链接库
@@ -88,15 +114,14 @@ file(GLOB variable [RELATIVE path] [globbing expressions]...)
 ```
 
  将检索到的文件都加入到variable中去
- 
+
  例如: 
- 
+
  ```cmake
  file(GLOB SRC_FILE "*.cc" "path/test_path/*.cc")
  ```
- 
- 则将path/test_path/下的所有.cc文件都加入到变量SRC_FILE中去。
 
+ 则将path/test_path/下的所有.cc文件都加入到变量SRC_FILE中去。
 
 
 
