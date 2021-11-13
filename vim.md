@@ -25,3 +25,13 @@ set autoindent
 colorscheme xcodedark
 ```
 
+
+
+### 插件
+
+```
+Plug 'scrooloose/nerdtree' // 文件管理
+Plug 'luochen1990/rainbow'	// 彩色括号
+Plug 'arzg/vim-colors-xcode' // xcode主题
+```
+
