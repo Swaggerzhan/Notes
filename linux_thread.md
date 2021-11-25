@@ -1,6 +1,10 @@
-# linux_thread
+# 利用多核性能
 
-### 进程的创建 thread_create()
+在Linux中，我们可以使用其提供的POSIX标准的函数来创建线程，进程等，通过多核来提升程序的性能。
+
+### 0x00 预备知识：线程的创建以及销毁
+
+其调用的系统调用为:
 
 ```C++
 #include <pthread.h>
@@ -15,65 +19,77 @@ int pthread_create(pthread_t *restrict tidp,
 * start_rtn  参数为函数地址开始运行， __新线程将从这里开始运行__
 * arg为      __函数start_rtn的参数__
 
+还有一些其他的系统调用接口提供了一些功能，如`pthread_self()`返回其线程的线程ID，`pthread_join()`来等待线程的结束，并回收捕获线程的返回数据，也可以直接`pthread_detach()`不等待其线程返回。
 
-### 进程的操作
-
-#### __1. pthread_t thread_self(void);__
-
-用来获取自身进程的进程ID
-
-#### __2. int pthread_equal(pthread_t tid1, pthread_t tid2);__
-
-用来比对进程ID
-
-#### __3. int pthread_join(pthread_t thread, void** rval_ptr);__
-
-用于捕获thread对应线程ID的返回值，如果线程thread尚未返回，则堵塞等待返回。join函数不能调用于已经detach的函数。
-
-```C++
-
+```c++
 void *write_thread(void *arg){
     //TODO
     void *data = new Data;
     return data;
 }
-
 void main(){
     pthread_t t1;
     pthread_create(&t1, nullptr, write_thread, nullptr);
     void *retData;
-    /* rval_ptr是个二级指针 */
-    pthread_join(t1, &retData);
+    pthread_join(t1, &retData); // 捕获返回值
     return;
 }
+```
 
+其余的一些使用方法具体可以查询Linux系统调用手册。
+
+### 0x01 同步之Futex
+
+对于线程进程等程序，由于逻辑需要，基本都需要用到关于锁相关的操作，其中比较常用的是Linux提供的`pthread_mutex`系列函数，但其底层的实现，在Linux2.6后，就由`futex`接管了。
+
+`futex`即 fast user-space mutex，拥有相比`mutex`更快的速度，通过用户态原子变量的比较，使得不用每次都陷入内核态，避免了上下文切换的开销。
+
+通过man我们可以看到`There is no glibc wrapper for this system call; see NOTES.`。所以对于使用，我们一般直接使用系统调用来实现。
+
+`futex`的函数原型为:
+
+```c++
+int futex(int *uaddr, int futex_op, int val,
+                 const struct timespec *timeout,   /* or: uint32_t val2 */
+                 int *uaddr2, int val3);
+```
+
+函数通过比较`*uaddr`和`val`，如果发现值相等，就会执行所给定的`futex_op`中的操作，这里我们拿`FUTEX_WAIT`和`FUTEX_WAKE`来举例。
+
+给定操作数`FUTEX_WAIT`，如果发现`*uaddr`和`val`相同，则陷入内核态，执行休眠的操作。
+
+给定操作数`FUTEX_WAKE`，如果发现`*uaddr`和`val`相同，则陷入内核态，执行唤醒操作，具体唤醒线程数量取决于`val`的值。
+
+需要用到的头文件有:
+
+```c++
+#include <linux/futex.h>	// SYS_futex
+#include <syscall.h>			// syscall
+#include <sys/time.h>			// timespec
+```
+
+用`futex`来实现一个简易版的阻塞于唤醒:
+
+```c++
+// 睡眠阻塞
+long futex_wait(int* addr, int expected, timesepc* timeout){
+	return syscall(SYS_futex, addr, (FUTEX_WAIT | FUTEX_PRIVATE_FLAG),
+                 expected, timeout, nullptr, 0
+  );
+}
+// 唤醒
+long futex_wait(int* addr, int num){
+  return syscall(SYS_futex, addr, (FUTEX_WAKE | FUTEX_PRIVATE_FLAG),
+  							 num, nullptr, nullptr, 0
+  );
+}
 ```
 
 
-#### __4. int pthread_cancel(pthread_t tid);__
 
-用于取消同一进程中的其他线程，pthread_cancel函数不等待终止，它仅仅提出要求。
 
-#### __5. int pthread_detach(pthread_t tid);__
 
-分离线程
 
-#### __6. cleanup_push和cleanup_pop__
-
-```C++
-#include <pthread.h>
-
-void pthread_cleanup_push(void (*rtn)(void*), void* arg);
-
-void pthread_cleanup_pop(int execute);
-```
-
-cleanup函数系列使用的是栈来记录类型，所以push进的函数调用方式是反方向的。使用pop(0)可以取消栈顶的函数。
-
-触发清理函数rtn:
-    * 调用 __pthread_exit时__
-    *  __响应取消请求时__
-    * 使用 __非零execute参数__ 调用pthread_cleanup_pop时候
 
 ### __7. 线程同步__
 
