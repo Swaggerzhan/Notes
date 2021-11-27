@@ -44,3 +44,41 @@ Reduce(string key, list valueList):
 
 ## 0x01 6.824 Lab1实现
 
+实验源码:
+
+```shell
+git clone git://g.csail.mit.edu/6.824-golabs-2021 6.824
+```
+
+Lab1中为我们定义了3个文件，我们按照其规则补完其剩下的代码即可，分别为`mr/coordinator.go`、`mr/rpc.go`、`mr/worker.go`，代表的即是Master，调用过程中需要用到的RPC参数以及返回内容，需要由我们自定义，以及Worker。
+
+##### 大致逻辑
+
+在Worker中我们这样设计，Worker是一个人死循环，一直通过RPC向Master获取任务，然后执行这个任务，这个任务可能是Map，也有可能是Reduce。
+
+```
+1. 通过RPC向Master获取任务
+2. 执行任务
+3. 提交任务，继续获取新任务
+
+任务分为Map和Reduce，在这里WorldCount例子中，我们这样做:
+Map任务中，通过给定文件读取响应数据，调用Map函数，然后将处理完的数据写入到Hash桶中
+Reduce任务中，读取关于这个Reduce需要用到的中间结果，然后执行Reduce操作，输出结果到最终文件
+```
+
+在Master中我们这样设计，Master是一个分配任务的角色，所以通过输入的文件量，我们分配固定的Task，也就是任务，然后通过RPC开放某些接口以供Worker来调用，主要用于获取任务，提交任务等等操作。
+
+```
+1. 生成Master对象，初始化Task，开始对外提供RPC服务
+2. 通过Worker调用的RPC分别处理不同的请求
+
+这里Master对外开放2个RPC，分别为请求任务和提交任务
+请求任务:
+  通过RPC响应将需要的文件名发送到Worker中，标记为当前Worker正在处理，这里需要处理一下Worker超时情况，需要
+  重新分配任务给其他Worker。
+提交任务:
+	通过RPC开放，检测当前记录中的Worker和提交Worker的ID是否相等，如果不等，说明发生了重新分配等情况，需要做其他处理
+```
+
+
+
