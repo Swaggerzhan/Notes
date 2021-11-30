@@ -25,3 +25,7 @@ C++学习经验 [C++](./C_plus_exp.md)
 [协程实现](./croutine.md)
 
 [C/C++的链接与装载是如何实现的](./Link.md)
+
+[6.824 lab 1 MapReduce](./MapReduce.md)
+
+[6.824 lab 2A](./Raft_lab2A.md)
