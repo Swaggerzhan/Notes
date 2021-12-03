@@ -46,7 +46,9 @@ nextIndex[]           对于每一个节点，需要发送给他的下一个日�
 matchIndex[]          对于每一个节点，已经复制给他的日志的最高索引值
 ```
 
+### Election
 
+投票。。。。
 
 ### LogEntries
 
@@ -115,14 +117,22 @@ Server3通过LogEntries(心跳)来同步其他节点的日志，通过之前的�
 prevLogIndex = 12
 prevLogTerm = 5
 entries[] 中是 index=13，term = 6的日志
+
+// Leader节点中的数据：
+nextIndex[s1] = 13
+nextIndex[s2] = 13
 ```
 
-Server1和Server2中的日志和Leader发送的LogEntries显然不一样，所以会返回False， __Leader会将prevLogIndex向前移动一位__ ，继续发送LogEnties，这回将发送：
+Server1和Server2中的日志和Leader发送的LogEntries显然不一样，所以会返回False， __Leader会将prevLogIndex向前移动一位__ ，修改nextIndex，继续发送LogEnties，这回将发送：
 
 ```
 prevLogIndex = 11
 prevLogTerm = 3
 entries[] 中有(index=12, term=5),(index=13, term=6)
+
+// Leader节点中的数据
+nextIndex[s1] = 12
+nextIndex[s2] = 12
 ```
 
 此时Server2中发现prevLogIndex和pervLogTerm匹配，接受了来自Leader的日志，同步日志和Leader一样(此处先不讨论commitIndex)。而Server1在pervLogIndex= 11处没有数据，同样返回false，Leader收到后继续向前移动prevLogIndex为10，发送：
@@ -131,15 +141,295 @@ entries[] 中有(index=12, term=5),(index=13, term=6)
 prevLogIndex = 10
 prevLogTerm = 3
 entries[] 中有(index=11, term=3),(index=12, term=5),(index=13, term=6)
+
+// Leader节点中的数据
+nextIndex[s1] = 11
+nextIndex[s2] = 14
 ```
 
 这回Server1比对通过，接受日志，完成所有的日志同步操作。
+
+__这种同步一次将nextIndex向后移动一位的速度在follower落后过多条日志时，将使得同步时间过长，所以可以考虑自己引入其他方法来提高日志同步的速度__ 。
 
 注：最初在Server2中，log index = 12的term4操作会被直接抛弃，因为当时的Raft没有得到多数票通过此条操作，所以Raft压根就没回应客户端，所以不必担心。
 
 ## 0x02 实现思路
 
+### 投票
 
+在6.824的2A实验的选举操作中，不要求对Log的判断，我们只需要判断其Term是否是最新的即可，那么每个节点都将开放一个投票的RPC接口供其他节点调用，这里我们定为`RequestVote`。
+
+同时，每个节点都需要维护一个定时器，当超时的时候，状态由Follower转为Candidate并企图开始新的一轮选举。
+
+关于投票的RPC请求参数以及响应参数结构体：
+
+```go
+type RequestVoteArgs struct {
+  Term 			int // 选举任期    
+  Candidate int // 被选举人
+}
+
+type RequestVoteReply struct {
+  Term 		int   // 选民所在的任期
+  Success bool  // 是否愿意将票投给被选举者
+}
+```
+
+选举细节还需要在2B中细化，需要融入LogEntries相关的操作，但2A中可以先忽略。
+
+### 心跳
+
+在投票部分讲过，每个节点都需要设定一个随机定时器，当定时器超时的时候出发选举操作，如果一个节点是Leader，那么这个超时操作将不再是开启新一轮选举，而是向所有Follower发送一个心跳以证明他们的Leader还在，不需要进行新一轮的选举。
+
+```go
+type HeartBeatArgs struct {
+  Term 			int // 当前任期
+  LeaderID 	int // 当前Leader的节点ID
+}
+
+type HeartBeatReply struct {
+  Term 		int  // 当前任期
+  Success bool // 心跳是否被接受
+}
+```
+
+如果心跳不被Follower所接受，则证明任期不对，整个集群中存在一个任期更高的节点，收到心跳包的Leader就需要“让位”，转为最高任期的Follower，并且标记本身LeaderID为-1，等待来着更高任期的Leader向他发送心跳。
 
 ## 0x03 具体代码实现
+
+首先的是Raft节点的设计：
+
+```go
+type Raft struct {
+  mu 						sync.Mutex
+  peers 				[]*labrpc.ClientEnd
+  persister 		*Persister // 2A中没有用到
+  me 						int
+  dead 					int32
+  
+  currentTerm 	int // 当前任期
+  voteFor				int // 当前任期获取本节点选票的节点
+  log						[]*LogEntry // 日志，2A中没有用到
+  
+ 	role							string 
+  leaderID					int
+  lastActiveTime 		time.Time // Follower中的定时器，用于发起选举
+  lastBroadcastTime time.Time // Leader，用于发送心跳
+  randomTimeout			time.Time // 生成的随机时间间隔
+}
+```
+
+Raft中，Follower的超时时间一般是随机的，由min~max，心跳间隔则一般取自min / 2，这里我们设定心跳间隔为100ms，则Follower的超时最短时间为200ms，最高我们设为400ms。
+
+
+
+投票方面，需要每个节点开放RPC接口`RequestVote`，Candidate通过调用`RequestVote`来获得选票，每一个节点内部都有一个`ElectionLoop`，当超时的时候，启动`Election`。
+
+```go
+func (rf* Raft) Election() {
+  rf.mu.Lock()
+  defer rf.mu.Unlock()
+  
+  now := time.Now()
+  if rf.lastActiveTime + rf.randomTimeout < now {
+    // 还未超时
+    return
+  }
+  // 超时，状态转为Candidate，开始新一轮选举
+  rf.role = Candidate
+  rf.currentTerm += 1
+  rf.voteFor = rf.me
+  rf.lastActiveTime = now
+  
+  // 在投票给自己的同时，向其他节点发起RPC获取选票
+  args := RequestVoteArgs{
+    Term : rf.currentTerm
+    Candidate : rf.me
+  }
+  
+  type Result struct {
+    peerID int
+    respond* RequestVoteReply
+  }
+  voteCount := 1 // 自己一票
+  totalCount := 1 // 所有票数，包括没有给自己投票的节点
+  resultChan := make(chan *Result, len(rf.peers)) // 管道
+  // 启协程获取选票，解锁
+  // 当结束后，由于解锁的请求，解锁期间，可能有任期变动，所以需要重新判断！
+  rf.mu.Unlock()
+  for index := 0; index < len(rf.peers); index ++ {
+    if index == rf.me {
+      continue
+    }
+    go func (id int){
+      reply := RequestVoteReply{}
+      if ok := rf.sendRequestVote(id, &args, &reply); ok {
+        resultChan <- &Result{peerID : id, respond: &reply }
+        return
+      }
+      resultChan <- &Result {peerID : id, respond : nil}
+    }(index)
+  }
+  maxTerm := 0 // 获取最高任期，以确定当前的任期是正确的
+  // 当发现有更高任期的节点存在，本次投票无意义
+  for {
+    select {
+      case result := <- resultChan:
+      	totalCount += 1
+      	if result.respond != nil {
+        	if result.respond.Success {
+          	voteCount += 1
+        	}
+        	if result.respond.Term > maxTerm{
+          	maxTerm = result.respond.Term
+        	}
+      	}
+        // 投票结束
+      	if totalCount == len(rf.peers) || voteCount > len(rf.peers) / 2 {
+        	goto END
+      	}
+    }
+  }
+  END:
+  // 重新上锁，并且检测状态
+  rf.mu.Lock()
+  if rf.role != Candidate { // 不是Candidate状态，则抛弃一切投票结果
+    return
+  }
+  // 有更高任期存在，转而成为Follower，等待Leader的心跳
+  if maxTerm > rf.currentTerm {
+    rf.role = Follower
+    rf.leaderID = -1
+    rf.voteFor = -1
+    rf.currentTerm = maxTerm
+    return
+  }
+  // 计算选票
+  if voteCount > len(rf.peers) / 2 {
+    rf.role = Leader
+    rf.leaderID = rf.me
+    rf.lastBroadcastTime = time.Now()
+    randomTime
+  }
+  
+}
+```
+
+
+
+
+
+开放给其他节点的RPC接口`RequestVote`，Candidate通过调用`RequestVote`来获取一个节点的选票。
+
+```go
+func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+  rf.mu.Lock()
+  defer rf.mu.Unlock()
+  // 被选举者任期比当前任期小，拒绝
+  if args.Term < rf.currentTerm {
+    reply.Term = rf.currentTerm
+    reply.Success = false
+    return
+  }
+  // 成为当前任期中的Follower
+  // 这里的leaderID还未确定！
+  if args.Term < rf.currentTerm {
+    rf.currentTerm = args.Term
+    rf.role = Follower
+    rf.leaderID = -1
+    rf.voteFor = args.CandidateID
+    rf.lastActiveTime = time.Now()
+    reply.Success = true
+  }
+}
+
+func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	return ok
+}
+```
+
+节点开放的RPC接口`HeartBeat`，Leader通过调用`HeartBeat`来时刻提醒Follower节点他的“Leader”在线。
+
+```go
+func (rf *Raft) HeartBeat(args* HeartBeatArgs, reply* HeartBeatReply){
+  rf.mu.Lock()
+  defer rf.mu.Unlock()
+  
+  // 发现对方Term小于本节点Term，返回错误
+  if args.Term < rf.currentTerm{
+    reply.Term = rf.currentTerm
+    reply.Success = false
+    return
+  }
+  // 发现对方的任期更大，并向我发送了心跳，则它是新Leader
+  if args.Term > rf.currentTerm{
+    rf.currentTerm = args.Term
+    rf.leaderID = args.LeaderID
+    rf.role = Follower
+    rf.voteFor = -1 // 当前任期并没有投票过
+  }
+  // 任期一致，更新超时时间
+  rf.lastActiveTime = time.Now()
+}
+```
+
+
+
+每个节点都需要进行维护的定时器以及Leader节点需要发送的心跳包：
+
+```go
+func (rf *Raft)HeartBeat() {
+  rf.mu.Lock()
+  defer rf.mu.Unlock()
+  
+  // 只有Leader才需要进行发送心跳包
+  if rf.role != Leader {
+    return
+  }
+  
+  now := time.Now() // 如果还没到时间，则返回
+  if now.Sub(rf.lastBroadcastTime) < 100 * time.Millisecond {
+    return
+  }
+  // 重置下一次发送心跳包时间
+  rf.lastBroadcastTime = time.Now()
+  for peerID := 0; peerID < len(rf.peers); peerID ++ {
+    if peerID == rf.me {
+      continue
+    }
+    tmpArgs := HeartBeatArgs{
+      Term : rf.currentTem,
+      LeaderID : rf.me,
+    }
+    // 这里不用解锁，创建协程后本函数很快退出并释放锁
+    go func(id int, args* HeartBeatArgs){
+      reply := HeartBeatReply{}
+      if ok := rf.sendHeartBeat(id, args, &reply); ok {
+        rf.mu.Lock()
+        rf.mu.Unlock()
+        if reply.Term > rf.currentTerm {
+          // 发现有更高的Term存在，转为Follower，不再发送心跳
+          rf.role = Follower
+          rf.leaderID = -1 // 当前Term并不知道谁是leader
+          rf.voteFor = -1  // 当前Term还未投票
+          rf.currentTerm = reply.Term
+        }
+      }
+    }(peerID, &tmpArgs)
+  }
+}
+
+func (rf* Raft) HeartBeatLoop(){
+  for !rf.killed(){
+    time.Sleep( 1 * time.Millisecond ) // 防止CPU占用过多
+    rf.HeartBeat()
+  }
+}
+
+func (rf *Raft) sendHeartBeat(server int, args *HeartBeatArgs, reply *HeartBeatReply) bool {
+	ok := rf.peers[server].Call("Raft.HeartBeat", args, reply)
+	return ok
+}
+```
 
