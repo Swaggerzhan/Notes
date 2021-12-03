@@ -78,9 +78,68 @@ Follower要做的：
 
 
 
-## 0x01 实现思路
+## 0x01 例子
+
+### Append Log 
+
+假定有日志为：
+
+```
+// 数字代表日志添加的term
+index：   10 11 12 13
+Server1:  3
+Server2:  3  3  4
+Server3:  3  3  5
+```
+
+如何生成这种日志：起初，client发送指令，所有节点均在index10下完成同步，Term为3，之后client又发送了一个指令，这条指令由Server2和Server3完成响应并返回，写入到日志index 11中，在Raft中，只要多数票通过，则Leader就会响应客户端，所以index 11的指令会被Commit掉，到此没有任何分歧。
+
+index 12之前，Leader为Server3，而后，Leader节点宕机了，Server2当选为Leader，他执行了来自客户端的一次操作，并且写入日志，term为4，但此时还未来得及发送LogEntries，立马宕机了，随后，节点们又选出Server3作为Leader，并且执行了来自客户端的操作，写入日志，此时Term为5。
 
 
 
-## 0x02 具体代码实现
+### Raft的强制日志同步
+
+我们假定有以下日志，其中Server3为Leader：
+
+```
+index：  10 11 12 13
+Server1: 3
+Server2: 3  3  4
+Server3: 3  3  5  6
+```
+
+Server3通过LogEntries(心跳)来同步其他节点的日志，通过之前的理论，可以知道Leader将发出
+
+```
+prevLogIndex = 12
+prevLogTerm = 5
+entries[] 中是 index=13，term = 6的日志
+```
+
+Server1和Server2中的日志和Leader发送的LogEntries显然不一样，所以会返回False， __Leader会将prevLogIndex向前移动一位__ ，继续发送LogEnties，这回将发送：
+
+```
+prevLogIndex = 11
+prevLogTerm = 3
+entries[] 中有(index=12, term=5),(index=13, term=6)
+```
+
+此时Server2中发现prevLogIndex和pervLogTerm匹配，接受了来自Leader的日志，同步日志和Leader一样(此处先不讨论commitIndex)。而Server1在pervLogIndex= 11处没有数据，同样返回false，Leader收到后继续向前移动prevLogIndex为10，发送：
+
+```
+prevLogIndex = 10
+prevLogTerm = 3
+entries[] 中有(index=11, term=3),(index=12, term=5),(index=13, term=6)
+```
+
+这回Server1比对通过，接受日志，完成所有的日志同步操作。
+
+注：最初在Server2中，log index = 12的term4操作会被直接抛弃，因为当时的Raft没有得到多数票通过此条操作，所以Raft压根就没回应客户端，所以不必担心。
+
+## 0x02 实现思路
+
+
+
+## 0x03 具体代码实现
 
