@@ -222,7 +222,52 @@ type Raft struct {
 }
 ```
 
-Raft中，Follower的超时时间一般是随机的，范围：[min~max]，心跳间隔则一般取自min / 2，这里我们设定心跳间隔为100ms，则Follower的超时最短时间为200ms，最高我们设为400ms。
+生成Raft节点和测试使用的代码：
+
+```go
+func (rf *Raft) GetState() (int, bool) {
+  rf.mu.Lock()
+  defer rf.mu.Unlock()
+
+  var term int
+  var isleader bool
+
+  term = rf.currentTerm
+  if rf.role == Leader {
+    isleader = true
+  }else {
+    isleader = false
+  }
+  return term, isleader
+}
+
+func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan ApplyMsg) *Raft {
+  rf := &Raft{}
+  rf.peers = peers
+  rf.persister = persister
+  rf.me = me
+
+  // Your initialization code here (2A, 2B, 2C).
+  rf.role = Follower
+  rf.currentTerm = 0
+  rf.leaderID = -1
+  rf.lastActiveTime = time.Now()
+  rf.lastActiveTimeInterval = time.Duration(200 + rand.Int31n(200)) * time.Millisecond
+
+  // initialize from state persisted before a crash
+  rf.readPersist(persister.ReadRaftState())
+
+  // start ticker goroutine to start elections
+  go rf.ticker()
+  go rf.ElectionLoop()
+  go rf.HeartBeatLoop()
+  return rf
+}
+
+
+```
+
+__Raft中，Follower的超时时间一般是随机的，范围：[min~max]，心跳间隔则一般取自min / 2，这里我们设定心跳间隔为100ms，则Follower的超时最短时间为200ms，最高我们设为400ms__ 。
 
 投票方面，需要每个节点开放RPC接口`RequestVoteRPC`，Candidate通过调用`RequestVoteRPC`来获得选票，每一个节点内部都有一个`ElectionLoop`，当超时的时候，且节点不是Leader状态，则启动`Election`开始新一轮选举。
 
