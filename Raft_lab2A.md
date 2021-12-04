@@ -165,13 +165,13 @@ __这种同步一次将nextIndex向后移动一位的速度在follower落后过�
 
 ```go
 type RequestVoteArgs struct {
-  Term 			int // 选举任期    
+  Term      int // 选举任期    
   Candidate int // 被选举人
 }
 
 type RequestVoteReply struct {
   Term 		int   // 选民所在的任期
-  Success bool  // 是否愿意将票投给被选举者
+  Success   bool  // 是否愿意将票投给被选举者
 }
 ```
 
@@ -183,13 +183,13 @@ type RequestVoteReply struct {
 
 ```go
 type HeartBeatArgs struct {
-  Term 			int // 当前任期
-  LeaderID 	int // 当前Leader的节点ID
+  Term          int // 当前任期
+  LeaderID      int // 当前Leader的节点ID
 }
 
 type HeartBeatReply struct {
-  Term 		int  // 当前任期
-  Success bool // 心跳是否被接受
+  Term          int  // 当前任期
+  Success       bool // 心跳是否被接受
 }
 ```
 
@@ -201,45 +201,56 @@ type HeartBeatReply struct {
 
 ```go
 type Raft struct {
-  mu 						sync.Mutex
-  peers 				[]*labrpc.ClientEnd
-  persister 		*Persister // 2A中没有用到
-  me 						int
-  dead 					int32
-  
-  currentTerm 	int // 当前任期
-  voteFor				int // 当前任期获取本节点选票的节点
-  log						[]*LogEntry // 日志，2A中没有用到
-  
- 	role							string 
-  leaderID					int
-  lastActiveTime 		time.Time // Follower中的定时器，用于发起选举
-  lastBroadcastTime time.Time // Leader，用于发送心跳
-  randomTimeout			time.Time // 生成的随机时间间隔
+  mu                sync.Mutex
+  peers             []*labrpc.ClientEnd
+  persister         *Persister // 2A中没有用到
+  me                int
+  dead              int32
+
+  currentTerm       int // 当前任期
+  voteFor           int // 当前任期获取本节点选票的节点
+  log               []*LogEntry // 日志，2A中没有用到
+
+  role              string
+  leaderID          int
+
+  lastBroadcastTime         time.Time // Leader发送心跳的时间
+  broadcastInterval         time.Duration // 100ms
+  lastActiveTime            time.Time 
+  lastActiveTimeInterval    time.Duration // 200ms - 400ms
+
 }
 ```
 
-Raft中，Follower的超时时间一般是随机的，由min~max，心跳间隔则一般取自min / 2，这里我们设定心跳间隔为100ms，则Follower的超时最短时间为200ms，最高我们设为400ms。
+Raft中，Follower的超时时间一般是随机的，范围：[min~max]，心跳间隔则一般取自min / 2，这里我们设定心跳间隔为100ms，则Follower的超时最短时间为200ms，最高我们设为400ms。
 
-
-
-投票方面，需要每个节点开放RPC接口`RequestVote`，Candidate通过调用`RequestVote`来获得选票，每一个节点内部都有一个`ElectionLoop`，当超时的时候，启动`Election`。
+投票方面，需要每个节点开放RPC接口`RequestVoteRPC`，Candidate通过调用`RequestVoteRPC`来获得选票，每一个节点内部都有一个`ElectionLoop`，当超时的时候，且节点不是Leader状态，则启动`Election`开始新一轮选举。
 
 ```go
+func (rf *Raft)ElectionLoop() {
+  for !rf.killed() {
+    time.Sleep(1 * time.Millisecond)
+    rf.Election()
+  }
+}
+
 func (rf* Raft) Election() {
   rf.mu.Lock()
   defer rf.mu.Unlock()
   
-  now := time.Now()
-  if rf.lastActiveTime + rf.randomTimeout < now {
-    // 还未超时
+  if rf.role == Leader {
     return
   }
+	// 未超时
+  now := time.Now()
+  if now.Sub(rf.lastActiveTime) < rf.lastActiveTimeInterval {
+    return
+  }
+  
   // 超时，状态转为Candidate，开始新一轮选举
   rf.role = Candidate
   rf.currentTerm += 1
   rf.voteFor = rf.me
-  rf.lastActiveTime = now
   
   // 在投票给自己的同时，向其他节点发起RPC获取选票
   args := RequestVoteArgs{
@@ -293,6 +304,7 @@ func (rf* Raft) Election() {
   END:
   // 重新上锁，并且检测状态
   rf.mu.Lock()
+  
   if rf.role != Candidate { // 不是Candidate状态，则抛弃一切投票结果
     return
   }
@@ -308,21 +320,19 @@ func (rf* Raft) Election() {
   if voteCount > len(rf.peers) / 2 {
     rf.role = Leader
     rf.leaderID = rf.me
+    // 设定心跳发送间隔100ms
     rf.lastBroadcastTime = time.Now()
-    randomTime
+    rf.broadcastInterval = time.Duration(100) * time.Millisecond
   }
-  
+  rf.lastActiveTime = time.Now()
+  rf.lastActiveTimeInterval = time.Duration(200 + rand.Int31n(200)) * time.Millisecond
 }
 ```
 
-
-
-
-
-开放给其他节点的RPC接口`RequestVote`，Candidate通过调用`RequestVote`来获取一个节点的选票。
+开放给其他节点的RPC接口`RequestVoteRPC`，Candidate通过调用`RequestVoteRPC`来获取一个节点的选票。
 
 ```go
-func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
   rf.mu.Lock()
   defer rf.mu.Unlock()
   // 被选举者任期比当前任期小，拒绝
@@ -333,7 +343,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
   }
   // 成为当前任期中的Follower
   // 这里的leaderID还未确定！
-  if args.Term < rf.currentTerm {
+  if args.Term > rf.currentTerm {
     rf.currentTerm = args.Term
     rf.role = Follower
     rf.leaderID = -1
@@ -344,15 +354,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 }
 
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
-	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	ok := rf.peers[server].Call("Raft.RequestVoteRPC", args, reply)
 	return ok
 }
 ```
 
-节点开放的RPC接口`HeartBeat`，Leader通过调用`HeartBeat`来时刻提醒Follower节点他的“Leader”在线。
+节点开放的RPC接口`HeartBeatRPC`，Leader通过调用`HeartBeatRPC`来时刻提醒Follower节点他的“Leader”在线。
 
 ```go
-func (rf *Raft) HeartBeat(args* HeartBeatArgs, reply* HeartBeatReply){
+func (rf *Raft) HeartBeatRPC(args* HeartBeatArgs, reply* HeartBeatReply){
   rf.mu.Lock()
   defer rf.mu.Unlock()
   
@@ -372,14 +382,24 @@ func (rf *Raft) HeartBeat(args* HeartBeatArgs, reply* HeartBeatReply){
   // 任期一致，更新超时时间
   rf.lastActiveTime = time.Now()
 }
+
+func (rf *Raft) sendHeartBeat(server int, args *HeartBeatArgs, reply *HeartBeatReply) {
+  ok := rf.peers[server].Call("Raft.HeartBeat", args, reply)
+  return ok
+}
 ```
 
-
-
-每个节点都需要进行维护的定时器以及Leader节点需要发送的心跳包：
+Leader节点在固定时间间隔需要发送的心跳包，这里使用`HeartBeat`来发送心跳包，`HeartBeatLoop`来实现100ms发送一次心跳：
 
 ```go
-func (rf *Raft)HeartBeat() {
+func (rf* Raft) HeartBeatLoop(){
+  for !rf.killed(){
+    time.Sleep( 1 * time.Millisecond ) 
+    rf.HeartBeat()
+  }
+}
+
+func (rf *Raft) HeartBeat() {
   rf.mu.Lock()
   defer rf.mu.Unlock()
   
@@ -389,7 +409,7 @@ func (rf *Raft)HeartBeat() {
   }
   
   now := time.Now() // 如果还没到时间，则返回
-  if now.Sub(rf.lastBroadcastTime) < 100 * time.Millisecond {
+  if now.Sub(rf.lastActiveTime) < rf.broadcastInterval {
     return
   }
   // 重置下一次发送心跳包时间
@@ -399,7 +419,7 @@ func (rf *Raft)HeartBeat() {
       continue
     }
     tmpArgs := HeartBeatArgs{
-      Term : rf.currentTem,
+      Term : rf.currentTerm,
       LeaderID : rf.me,
     }
     // 这里不用解锁，创建协程后本函数很快退出并释放锁
@@ -419,17 +439,20 @@ func (rf *Raft)HeartBeat() {
     }(peerID, &tmpArgs)
   }
 }
-
-func (rf* Raft) HeartBeatLoop(){
-  for !rf.killed(){
-    time.Sleep( 1 * time.Millisecond ) // 防止CPU占用过多
-    rf.HeartBeat()
-  }
-}
-
-func (rf *Raft) sendHeartBeat(server int, args *HeartBeatArgs, reply *HeartBeatReply) bool {
-	ok := rf.peers[server].Call("Raft.HeartBeat", args, reply)
-	return ok
-}
 ```
 
+## 0x04 测试用例
+
+6.824中给定的测试用例通过：
+
+```shell
+➜  raft git:(master) ✗ go test -run 2A
+Test (2A): initial election ...
+  ... Passed --   3.1  3 4712  518338    0
+Test (2A): election after network failure ...
+  ... Passed --   8.6  3 14126  915384    0
+Test (2A): multiple elections ...
+  ... Passed --   5.7  7 1255  104664    0
+PASS
+ok  	6.824/raft	17.824s
+```
