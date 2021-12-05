@@ -541,6 +541,30 @@ func (rf *Raft) lastTerm() int {
 
 ## 0x03 测试用例
 
+6.824 Lab2B中给出的测试均通过。
+
+```shell
+➜  raft git:(master) ✗ go test -run 2B          
+Test (2B): basic agreement ...
+  ... Passed --   0.6  3   14    3578    3
+Test (2B): RPC byte count ...
+  ... Passed --   1.4  3   46  112486   11
+Test (2B): agreement despite follower disconnection ...
+  ... Passed --   3.8  3  142   36509    7
+Test (2B): no agreement if too many followers disconnect ...
+  ... Passed --   3.9  5  232   52982    4
+Test (2B): concurrent Start()s ...
+  ... Passed --   0.7  3   16    4126    6
+Test (2B): rejoin of partitioned leader ...
+  ... Passed --   3.9  3  248   57332    4
+Test (2B): leader backs up quickly over incorrect follower logs ...
+  ... Passed --  31.3  5 2892 2669420  103
+Test (2B): RPC counts aren't too high ...
+  ... Passed --   2.2  3   74   19806   12
+PASS
+ok  	6.824/raft	47.625s
+```
+
 
 # 论文笔记
 
@@ -577,7 +601,7 @@ figure5.4.2中也说明了， __领导人知道一条当前任期内的日志条
 ![](./Raft_lab2B/1.png)
 
 #### a:
-S1是服务器，在接收了客户端的一个请求后，S1将日志写入了Slot2处，Term为2，并同步给了S2后就宕机了，由于少数派持有的日志条目，这条日志必然不会被提交，这也引申出了Raft选举中的重点。
+S1是Leader，在接收了客户端的一个请求后，S1将日志写入了Slot2处，Term为2，并同步给了S2后就宕机了，由于少数派持有的日志条目，这条日志必然不会被提交，这也引申出了Raft选举中的重点。
 
 #### b:
 S5当选为Leader，并且处理了一条来自客户端的日志，写入Slot2处的位置，Term为3。
