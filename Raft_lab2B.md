@@ -296,7 +296,12 @@ func (rf *Raft)coroutineAppendEntries(index int, args* AppendEntriesArgs) {
 }
 ```
 
-每个Follower暴露的RPC接口`AppendEntriesRPC`：
+每个Follower暴露的RPC接口`AppendEntriesRPC`，论文figure5.1中提出了5点要求，分别为：
+1. args.Term < rf.currentTerm 同步日志失败。
+2. args.PrevLogIndex处点日志条目任期和args.PrevLogTerm不同，同步日志失败。
+3. 在2通过的情况下，可以强制覆盖“Follower中的已存在日志”。
+4. 附加Follower中不存在的日志
+5. 令commitIndex = min(args.LeaderCommit，rf.commitIndex，新日志条目索引值)。
 
 ```go
 func (rf *Raft) sendAppendEntriesRPC(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
@@ -480,7 +485,11 @@ END:
 }
 ```
 
-`RequestVoteRPC`中关于Log长度以及Log执行任期的判断：
+`RequestVoteRPC`中关于Log长度以及Log执行任期的判断，论文figure5.2中说明了：
+1. args.Term < rf.currentTerm, 拒绝投票。(肯定的)
+2. 当前节点还未投票，且候选人日志至少和自己一样的新，则投票给他。
+
+这里出现了一个比较难的点，在论文figure5.4.1的选举限制中这样说道： __Raft使用投票的方式来阻止一个候选人赢得选票，除非这个候选人包含了全部的已经提交的日志条目__ 。[具体解释](#选举限制)
 
 ```go
 func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
@@ -520,3 +529,11 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 ```
 
 ## 0x03 测试用例
+
+
+
+## 0x04 一些具体解释
+
+### 选举限制
+
+论文figure5.4.1中明确指出了如果一个候选人想要赢得选举，就必须拥有所有已经提交的日志条目。
