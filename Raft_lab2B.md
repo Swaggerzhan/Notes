@@ -151,18 +151,18 @@ type Raft struct {
 
 ```go
 type AppendEntriesArgs struct {
-  term          int // 当前任期
-  leaderID      int 
-  prevLogIndex  int // 当前提交日志index的前一个index
-  prevLogTerm   int // prevLogIndex下的任期
+  Term          int // 当前任期
+  LeaderID      int 
+  PrevLogIndex  int // 当前提交日志index的前一个index
+  PrevLogTerm   int // prevLogIndex下的任期
   
-  entries       []LogEntry // 需要同步的日志
-  leaderCommit  int
+  Entries       []LogEntry // 需要同步的日志
+  LeaderCommit  int
 }
 
 type AppendEntriesReply struct {
-  term      int
-  success   bool
+  Term      int
+  Success   bool
 }
 ```
 
@@ -489,7 +489,7 @@ END:
 1. args.Term < rf.currentTerm, 拒绝投票。(肯定的)
 2. 当前节点还未投票，且候选人日志至少和自己一样的新，则投票给他。
 
-这里出现了一个比较难的点，在论文figure5.4.1的选举限制中这样说道： __Raft使用投票的方式来阻止一个候选人赢得选票，除非这个候选人包含了全部的已经提交的日志条目__ 。[具体解释](#选举限制)
+这里出现了一个比较难的点，在论文figure5.4.1的选举限制中这样说道： __Raft使用投票的方式来阻止一个候选人赢得选票，除非这个候选人包含了全部的已经提交的日志条目__ 。[具体解释](#0x05选举限制)
 
 ```go
 func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
@@ -506,7 +506,6 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 	// 成为当前任期中的Follower
 	// 这里的leaderID还未确定！
-	// 2B 中不能直接投票，需要判断日志长度等等一系列操作
 	if args.Term > rf.currentTerm {
 		//fmt.Printf("accept: [%d] vote -> [%d] \n", rf.me, args.CandidateID)
 		rf.currentTerm = args.Term
@@ -516,6 +515,8 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 	if rf.voteFor == -1 { // 还没投票
 		lastLogTerm := rf.lastTerm()
+		
+		// 选举限制
 		// 被选举者日志最后一条中的任期要么是最高的
 		// 又或者是相同任期，但其日志是最长的
 		if args.LastLogTerm > lastLogTerm || (args.LastLogIndex == lastLogTerm && args.LastLogIndex >= rf.lastIndex()) {
@@ -525,15 +526,74 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 		}
 	}
 }
-
+// 最新日志条目索引
+func (rf *Raft) lastIndex() int {
+    return len(rf.log)
+}
+// 最新日志条目任期
+func (rf *Raft) lastTerm() int {
+    if len(rf.log) != 0 {
+        return rf.log[len(rf.log) - 1].Term
+    }
+    return 0
+}
 ```
 
 ## 0x03 测试用例
 
 
+# 论文笔记
 
-## 0x04 一些具体解释
+## 0x04 日志同步
 
-### 选举限制
+figure5.3具体说明了日志。
 
-论文figure5.4.1中明确指出了如果一个候选人想要赢得选举，就必须拥有所有已经提交的日志条目。
+一旦一个Leader被选举出来，就可以处理来自客户端的服务， __客户端的每一个请求都包含一条可以被`复制状态机`执行的指令，Leader会将这条指令当作日志条目添加到本地的日志中，然后通过RPC并发发送给其他的Follower，当多数Follower同步了这条日志后，Leader才会响应客户端__ 。
+
+__Leader来决定什么时候将日志条目中的指令提交到状态机中，这种日志被称为`已提交`(commited)，Raft保证所有`已提交`的指令最终都会被状态机执行__ 。
+
+__在Leader将创建的日志条目同步到多数服务器上时，日志就会变为`已提交`，同时，Leader之前的所有日志条目也都将一并被提交__ 。
+
+要使得Follower日志和自己保持一致，就要找到`最后两者达成一致`的地方，然后将那个点之后的日志全部删除(Follower节点上)，发送自己的日志给Follower。
+
+#### 同步过程：
+
+Leader在刚刚当选的时候，会维护一个nextIndex的变量，nextIndex将为Leader本地日志index+1。而发送的AppendEntries中的PrevLogIndex就为nextIndex-1。
+
+Leader发送的AppendEntries在被Follower收到后，Follower将比较本地日志索引为`args.PrevLogIndex`下的日志条目的Term和`args.PrevLogTerm`的任期是否相同，如果不同(或者不存在)，Follower将回绝此次操作，而Leader会将`PrevLogIndex - 1`，然后重复一遍，直到同步为止。
+
+
+## 0x05 选举限制
+
+figure5.4.1中明确指出了如果一个候选人想要赢得选举，就必须拥有所有已经提交的日志条目。
+
+figure5.4.2中也说明了， __领导人知道一条当前任期内的日志条目时可以被提交的，只要它被存储到了大多数节点上(即使commitIndex没有被更新)，如果一个领导人在提交日志时宕机了，则未来的领导人必须继续尝试复制这条日志记录__ 。
+
+这就需要在投票的时候决定谁拥有`最新的`日志条目，规则为：
+
+ __Raft通过比较两份日志中最后一条日志条目的索引值和任期号来确定谁的日志比较新：如果两份日志最后的条目的任期号不同，那么任期号大的日志更新。如果两份日志最后的条目任期号相同，那么日志长度比较长的那个更新__ 。
+ 
+论文中也给出了一个例子：
+![](./Raft_lab2B/1.png)
+
+#### a:
+S1是服务器，在接收了客户端的一个请求后，S1将日志写入了Slot2处，Term为2，并同步给了S2后就宕机了，由于少数派持有的日志条目，这条日志必然不会被提交，这也引申出了Raft选举中的重点。
+
+#### b:
+S5当选为Leader，并且处理了一条来自客户端的日志，写入Slot2处的位置，Term为3。
+
+让我们`将时间轴拉回S5当选前`， __为何S5可以当选？__ 根据上述日志最新的规则，S1和S2必然不会投票给S5，这是因为S1和S2的 __最后一条日志条目的任期高于S5__ ，但是S3和S4不会受此约束，它们投了同意票，加上S5本身多票当选(3票)， __如果S5没有宕机，不出所料，S1和S2中Slot2处的日志将被覆盖掉(这个操作是没问题的)__ 。
+
+#### c:
+在b结束后，S5宕机了，随后，S1当选为Leader，事实也确实如此， __S1可以拿到S2，S3，S4的选票(加上本身已经4票可以当选，S5会拒绝)__ 。S1当选为Leader后处理了一条来自客户端的请求，将日志条目写入到Solt3处，Term为4。
+
+接下来c中发生的一些东西将影响后续的走向，假设S1处理完请求后立马宕机了，那么后续将跳转到d图中的场景，而如果S1没有立刻宕机，而是成功的将日志(AppendEntries)同步到了S2和S3中，那么将跳转到e图中。
+
+#### d:
+在c中，Leader机S1处理完请求后，只写入了本地日志，没来得及同步日志，就宕机了，随后，S5再次当选(S5可以拿到S2, S3, S4和本身4票)，之后，S5开始发送日志同步(AppendEntries)，S1和S2中原先的日志将被覆盖掉。
+
+#### e:
+在c中，Leader机处理完请求后，没有立刻宕机，它成功的将Slot2处，Term为2的日志条目同步到了S3中，随后才宕机。
+
+接下来将发生的： __S4和S5不可能当选(根据选举规则)__ ，之后S1，S2，S3可能当选，由图可看到，例子中再次当选的是S1，随后的日志同步大家都已明了，这里就不再赘述。
+
