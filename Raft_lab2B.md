@@ -1,6 +1,8 @@
 # 6.824 Lab2B Raft学习笔记
 
-## 0x00 理论
+## 0x00 基础理论
+
+一些基础理论知识，如果了解可以直接跳转到[代码实现](#0x01设计思路) 。
 
 ### Raft节点
 
@@ -109,6 +111,7 @@ __这种同步一次将nextIndex向后移动一位的速度在follower落后过�
 
 注：最初在Server2中，log index = 12的term4操作会被直接抛弃，因为当时的Raft没有得到多数票通过此条操作，所以Raft压根就没回应客户端，所以不必担心。
 
+
 ## 0x01 设计思路
 
 ### Raft 
@@ -163,6 +166,11 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
   Term      int
   Success   bool
+  
+  // quick backup
+  XTerm     int
+  XIndex    int
+  XLen      int
 }
 ```
 
@@ -186,11 +194,13 @@ type RequestVoteReply struct {
 
 ## 0x02 代码实现
 
-Leader节点中，Leader不再向Follower发送心跳，转而发送AppendEntries来进行强制同步日志的操作。
+### 日志和心跳
+
+在2B的实现中，Leader不再向Follower发送心跳，转而发送AppendEntries来进行强制同步日志的操作，同时，AppendEntries也“当作”心跳包的作用。
 
 每个节点通过`AppendEntriesRPC`来暴露调用接口给Leader，Leader则通过`AppendEntiesLoop`来定时发送`AppendEntries`，这里则设定为100ms。
 
-具体的`AppendEntriesLoop`和`AppendEntries`:
+当一个节点成为Leader时需要关注的函数`AppendEntriesLoop`和`AppendEntries`:
 
 ```go
 func (rf *Raft) AppendEntriesLoop() {
@@ -203,7 +213,6 @@ func (rf *Raft) AppendEntriesLoop() {
 func (rf *Raft) AppendEntries() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-
 	// Leader 才需要广播
 	if rf.role != Leader {
 		return
@@ -239,11 +248,7 @@ func (rf *Raft) AppendEntries() {
 	// 更新超时时间
 	rf.lastBroadcastTime = time.Now()
 }
-```
 
-其中，`AppendEntries`启动了协程并发发送RPC请求：
-
-```go
 func (rf *Raft)coroutineAppendEntries(index int, args* AppendEntriesArgs) {
 	reply := AppendEntriesReply{}
 	if ok := rf.sendAppendEntriesRPC(index, args, &reply); !ok {
@@ -253,24 +258,26 @@ func (rf *Raft)coroutineAppendEntries(index int, args* AppendEntriesArgs) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	// 必须？
+	// 任期发生改变，不再是Leader了！
 	if rf.currentTerm != args.Term {
 		return
 	}
 
 	// 有更高任期节点存在，成为当前任期Follower，等待Leader
-	if rf.currentTerm < args.Term {
-		rf.currentTerm = args.Term
+	if rf.currentTerm < reply.Term {
+		rf.currentTerm = reply.Term
 		rf.role = Follower
 		rf.voteFor = -1
 		rf.leaderID = -1
 		return
 	}
-
-	// 日志同步完成
+	// Follower同意同步日志
 	if reply.Success {
-		// TODO
-		rf.nextIndex[index] += len(args.Entries)
+	   // 这里是一个坑点！
+	   // 考虑使用以下代码再并发发送RPC时，由于网络请求延迟的情况，Leader多发送了一条
+	   // 并且都被Follower接受了会如何？
+		//rf.nextIndex[index] += len(args.Entries)
+		rf.nextIndex[index] = args.PrevLogIndex + len(args.Entries) + 1
 		rf.matchIndex[index] = rf.nextIndex[index] - 1
 
 		sortedMatchIndex := make([]int, 0)
@@ -286,17 +293,33 @@ func (rf *Raft)coroutineAppendEntries(index int, args* AppendEntriesArgs) {
 		if newCommitIndex > rf.commitIndex && rf.log[newCommitIndex - 1].Term == rf.currentTerm {
 			rf.commitIndex = newCommitIndex
 		}
-		// TODO
 	}else {
-		rf.nextIndex[index] -= 1
-		if rf.nextIndex[index] < 1 {
-			rf.nextIndex[index] = 1
+		// quick backup
+		// Log不存在
+		if reply.XTerm == -1 {
+			rf.nextIndex[index] = args.PrevLogIndex - reply.XLen + 1
+		}else {
+			// 遍历寻找，或者有更好的想法也可以
+			for conflictIndex := reply.XIndex; conflictIndex < reply.XIndex + reply.XLen; conflictIndex ++ {
+				if rf.log[conflictIndex - 1].Term != reply.XTerm {
+					// 冲突Index
+					rf.nextIndex[index] = conflictIndex
+					break
+				}
+			}
 		}
+		// 普通同步方式，直接将nextIndex - 1，在一个Follower已经落后了非常多Log后
+		// 同步将非常的缓慢
+		//rf.nextIndex[index] -= 1
+		//if rf.nextIndex[index] < 1 {
+		//	rf.nextIndex[index] = 1
+		//}
 	}
 }
+
 ```
 
-每个Follower暴露的RPC接口`AppendEntriesRPC`，论文figure5.1中提出了5点要求，分别为：
+每个Follower暴露的RPC接口`AppendEntriesRPC`，论文5.1中提出了5点要求，分别为：
 1. args.Term < rf.currentTerm 同步日志失败。
 2. args.PrevLogIndex处点日志条目任期和args.PrevLogTerm不同，同步日志失败。
 3. 在2通过的情况下，可以强制覆盖“Follower中的已存在日志”。
@@ -314,14 +337,14 @@ func (rf *Raft) AppendEntriesRPC(args* AppendEntriesArgs, reply* AppendEntriesRe
 	defer rf.mu.Unlock()
 
 	// 对方任期更小，直接返回错误
-	if args.Term < rf.currentTerm {
+	if rf.currentTerm > args.Term {
 		reply.Success = false
 		reply.Term = rf.currentTerm
 		return
 	}
 
 	// 更大任期的Leader发来AppendLog
-	if args.Term > rf.currentTerm {
+	if rf.currentTerm < args.Term {
 		rf.currentTerm = args.Term
 		rf.role = Follower
 		rf.voteFor = -1
@@ -335,12 +358,28 @@ func (rf *Raft) AppendEntriesRPC(args* AppendEntriesArgs, reply* AppendEntriesRe
 	if len(rf.log) < args.PrevLogIndex {
 		reply.Success = false
 		reply.Term = rf.currentTerm
+		// quick backup
+		reply.XTerm = -1
+		reply.XLen = args.PrevLogIndex - len(rf.log)
 		return
 	}
 
 	if args.PrevLogIndex > 0 && rf.log[args.PrevLogIndex - 1].Term != args.PrevLogTerm {
 		reply.Success = false
 		reply.Term = rf.currentTerm
+		// quick backup
+		reply.XLen = 0
+		reply.XTerm = rf.log[args.PrevLogIndex - 1].Term
+		// 找出XTerm的首个日志条目的索引
+		for index := args.PrevLogIndex; index > 0 ; index -- {
+			if reply.XTerm == rf.log[index - 1].Term {
+				reply.XLen += 1
+				continue
+			}
+			reply.XIndex = index
+			break
+		}
+		reply.XIndex += 1
 		return
 	}
 
@@ -351,7 +390,7 @@ func (rf *Raft) AppendEntriesRPC(args* AppendEntriesArgs, reply* AppendEntriesRe
 			rf.log = append(rf.log, log)
 		}else {
 			if rf.log[index - 1].Term != log.Term {
-				rf.log = rf.log[:index - 1] // 删除冲突以及之后的日志，强制同步为和Leader发送的日志
+				rf.log = rf.log[:index - 1] 
 				rf.log = append(rf.log, log)
 			}
 		}
@@ -366,14 +405,13 @@ func (rf *Raft) AppendEntriesRPC(args* AppendEntriesArgs, reply* AppendEntriesRe
 	}
 	reply.Term = rf.currentTerm
 	reply.Success = true
-
 }
 
 ```
 
-#### 选举
+### 选举方式
 
-选举和2A中也有所不同，加入了Log长度以及Log执行任期的判断，同样每个Follower暴露`RequestVoteRPC`接口，每个节点通过`ElectionLoop`来定期发送选举请求，当收到Leader发送来的`AppendEntries`时，重置定时。
+选举和2A中也有所不同，每个节点都不能随意投票，有条件限制，同样每个Follower暴露`RequestVoteRPC`接口，每个节点通过`ElectionLoop`来定期发送选举请求，当收到Leader发送来的`AppendEntries`时，重置定时。
 
 ```go
 func (rf *Raft) ElectionLoop () {
@@ -383,7 +421,6 @@ func (rf *Raft) ElectionLoop () {
 	}
 }
 
-// 超时被调用，开始新一轮选举
 func (rf* Raft) Election() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -405,6 +442,8 @@ func (rf* Raft) Election() {
 	args := RequestVoteArgs{
 		Term : rf.currentTerm,
 		CandidateID : rf.me,
+		LastLogTerm: rf.lastTerm(),
+		LastLogIndex: rf.lastIndex(),
 	}
 
 	type Result struct {
@@ -484,12 +523,13 @@ END:
 	rf.lastActiveTimeInterval = time.Duration(200 + rand.Int31n(200)) * time.Millisecond
 }
 ```
+每个节点暴露的RPC调用接口`RequestVoteRPC`
 
-`RequestVoteRPC`中关于Log长度以及Log执行任期的判断，论文figure5.2中说明了：
+`RequestVoteRPC`中关于Log长度以及Log执行任期的判断，论文5.2中说明了：
 1. args.Term < rf.currentTerm, 拒绝投票。(肯定的)
 2. 当前节点还未投票，且候选人日志至少和自己一样的新，则投票给他。
 
-这里出现了一个比较难的点，在论文figure5.4.1的选举限制中这样说道： __Raft使用投票的方式来阻止一个候选人赢得选票，除非这个候选人包含了全部的已经提交的日志条目__ 。[具体解释](#0x05选举限制)
+这里出现了一个比较难的点，在论文5.4.1的选举限制中这样说道： __Raft使用投票的方式来阻止一个候选人赢得选票，除非这个候选人包含了全部的已经提交的日志条目__ 。[具体解释](#0x05选举限制)
 
 ```go
 func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
@@ -497,17 +537,15 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	reply.Success = false
 	// 被选举者任期比当前任期小，拒绝
-	//fmt.Printf("current node Term at %d\n", rf.currentTerm)
-	//fmt.Printf("[%d] request for vote, server[%d].Term: %d\n", args.CandidateID, args.CandidateID, args.Term)
-	if args.Term < rf.currentTerm {
+	if rf.currentTerm > args.Term {
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		return
 	}
 	// 成为当前任期中的Follower
 	// 这里的leaderID还未确定！
-	if args.Term > rf.currentTerm {
-		//fmt.Printf("accept: [%d] vote -> [%d] \n", rf.me, args.CandidateID)
+	// 2B 中不能直接投票，需要判断日志长度等等一系列操作
+	if rf.currentTerm < args.Term {
 		rf.currentTerm = args.Term
 		rf.role = Follower
 		rf.leaderID = -1
@@ -515,27 +553,139 @@ func (rf *Raft) RequestVoteRPC(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 	if rf.voteFor == -1 { // 还没投票
 		lastLogTerm := rf.lastTerm()
-		
-		// 选举限制
 		// 被选举者日志最后一条中的任期要么是最高的
 		// 又或者是相同任期，但其日志是最长的
-		if args.LastLogTerm > lastLogTerm || (args.LastLogIndex == lastLogTerm && args.LastLogIndex >= rf.lastIndex()) {
+		if args.LastLogTerm > lastLogTerm || (args.LastLogTerm == lastLogTerm && args.LastLogIndex >= rf.lastIndex()) {
 			rf.voteFor = args.CandidateID
 			rf.lastActiveTime = time.Now()
 			reply.Success = true
 		}
 	}
 }
-// 最新日志条目索引
+
 func (rf *Raft) lastIndex() int {
-    return len(rf.log)
+	return len(rf.log)
 }
-// 最新日志条目任期
+
 func (rf *Raft) lastTerm() int {
-    if len(rf.log) != 0 {
-        return rf.log[len(rf.log) - 1].Term
-    }
-    return 0
+	if len(rf.log) != 0 {
+		return rf.log[len(rf.log) - 1].Term
+	}
+	return 0
+}
+
+func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+	ok := rf.peers[server].Call("Raft.RequestVoteRPC", args, reply)
+	return ok
+}
+```
+
+### 其他
+
+生成Raft的Make函数，这里nextIndex和matchIndex都是Leader中容失的内容，所以我们干脆在一个选举成功后再生成，不必在Make阶段就生成。
+
+```go
+func Make(peers []*labrpc.ClientEnd, me int,
+	persister *Persister, applyCh chan ApplyMsg) *Raft {
+	rf := &Raft{}
+	rf.peers = peers
+	rf.persister = persister
+	rf.me = me
+
+	// Your initialization code here (2A, 2B, 2C).
+	rf.applyChan = applyCh
+	rf.role = Follower
+	rf.currentTerm = 0
+	rf.leaderID = -1
+	rf.voteFor = -1
+	rf.lastActiveTime = time.Now()
+	rf.lastActiveTimeInterval = time.Duration(200 + rand.Int31n(200)) * time.Millisecond
+
+	// initialize from state persisted before a crash
+	rf.readPersist(persister.ReadRaftState())
+
+	// start ticker goroutine to start elections
+	go rf.ticker()
+
+	go rf.ElectionLoop()
+	go rf.applyLogLoop(applyCh)
+	go rf.AppendEntriesLoop()
+	return rf
+}
+
+```
+
+在Make中，我们可以看到一个函数`applyLogLoop`，这个函数是用于向状态机发送已经提交的日志条目，2B中是通过`applyCh`这个管道来判断日志条目是否有完成同步的。内容：
+
+```go
+func (rf *Raft) applyLogLoop (applyChan chan ApplyMsg) {
+	for !rf.killed() {
+		time.Sleep(10 * time.Millisecond)
+
+		var appliesMsgs = make([]ApplyMsg, 0)
+		func() {
+			rf.mu.Lock()
+			defer rf.mu.Unlock()
+
+			for rf.commitIndex > rf.lastApplied {
+				rf.lastApplied += 1
+				appliesMsgs = append(appliesMsgs, ApplyMsg{
+					Command: rf.log[rf.lastApplied - 1].Command,
+					CommandValid: true,
+					CommandIndex: rf.lastApplied,
+				})
+			}
+		}()
+
+		rf.mu.Lock()
+		for _, msg := range appliesMsgs {
+			applyChan <- msg
+		}
+		rf.mu.Unlock()
+	}
+}
+```
+
+剩下一些杂七杂八的函数，一些是测试需要使用的：
+
+```go
+func (rf *Raft) GetState() (int, bool) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	var term int
+	var isleader bool
+
+	term = rf.currentTerm
+	if rf.role == Leader {
+		isleader = true
+	}else {
+		isleader = false
+	}
+	return term, isleader
+}
+
+func (rf *Raft) Start(command interface{}) (int, int, bool) {
+	index := -1
+	term := -1
+	isLeader := true
+
+	// Your code here (2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	if rf.role != Leader {
+		return -1, -1, false
+	}
+
+	log := LogEntry{
+		Command: command,
+		Term: rf.currentTerm,
+	}
+	rf.log = append(rf.log, log)
+	index = len(rf.log)
+	term = rf.currentTerm
+	return index, term, isLeader
 }
 ```
 
@@ -620,4 +770,101 @@ S5当选为Leader，并且处理了一条来自客户端的日志，写入Slot2�
 在c中，Leader机处理完请求后，没有立刻宕机，它成功的将Slot2处，Term为2的日志条目同步到了S3中，随后才宕机。
 
 接下来将发生的： __S4和S5不可能当选(根据选举规则)__ ，之后S1，S2，S3可能当选，由图可看到，例子中再次当选的是S1，随后的日志同步大家都已明了，这里就不再赘述。
+
+## 0x06 快速备份
+
+在论文5.3的Log Replication简略了说明了一种日志快速备份的机制，6.824课程教授有说到了他所用到的实现方式，通过增加Follower在AppendEntries回复的信息来实现：
+
+1. Xterm: Follower中与Leader冲突的任期号
+2. Xindex: Xterm开始的index
+3. Xlen: Xterm的长度
+
+解释一下Xterm，在`AppendEntries`中，Leader将发送2个关键的字段，分别为`PrevLogIndex`以及`PrevLogTerm`，如果Follower发现，本地的日志`log[PrevLogIndex].Term != PrevLogTerm`，那么就证明发现了冲突，则`Xterm`将被设定为`log[PrevLogIndex].Term`。
+
+接下来的Xindex和Xlen就很好解释了，Xindex就是Follower本地日志条目中关于`Xterm`开始的那个索引位置，Xlen则是关于`Xterm`的所有日志条目总长度，6.824中也给出了3个例子。
+
+__注：特殊情况将在例3中说明__ 。
+
+
+#### 例 1：
+这里假设S2为Leader，S1为Follower，我们单独拎出这两个节点，不讨论其他节点。
+
+```
+index : 1   2   3   4
+S1      4   5   5
+S2      4   6   6   6
+```
+
+S2作为Leader发送AppendEntries到S1，内容为
+```
+PrevLogIndex = 3
+PrevLogTerm = 6
+Entries[] = "6"(位于index=4下的日志条目)
+```
+Follower S1发现，本地log[PrevLogIndex].Term = 5，不等于6，随即返回：
+```
+Xterm = 5
+Xindex = 2
+Xlen = 2
+```
+Leader通过Follower返回的信息知道了，在Follower日志中，冲突在Xterm=5，但具体是哪个index，Leader也不得而知，随即开始了遍历(你可以用更快的方法)，遍历范围就是任期为5的所有日志，直到找到冲突点。
+
+本例子中，Leader很快知道了冲突位置在Xindex=2的位置，也就是一开始就冲突了，接下来，Leader将nextIndex[S1]设为Xindex，在下一次AppendEntries中，Leader将在这个位置开始同步。
+
+#### 例 2：
+```
+index : 1   2   3   4
+S1      4   4   4
+S2      4   6   6   6
+```
+Leader向Follower发送：
+
+```
+PrevLogIndex = 3
+PrevLogTerm = 6
+Entries[] = "6"
+```
+
+Follower比对发现，本地`log[PrevLogIndex].Term != PrevLogTerm`，返回：
+
+```
+Xterm = 4
+Xindex = 1
+Xlen = 3
+```
+
+Leader开始从Xindex=1的位置开始遍历，遍历的长度就是Xlen，发现和本地日志一致(本地index=1的位置term也为4)，接下里，Leader将走到index=2的位置，这回Leader发现了不同的地方了(index=2时本地日志条目Term=6)，这即是冲突点，那么Leader将设置nextIndex[S1] = 2
+
+#### 例 3：
+
+在例3中，和之前情况有所不同，Follower的log[PrevLogIndex]处没有日志存在，此时：
+
+1. Xterm 直接设定为-1，表示当前位置没有日志
+2. Xindex 没有用处
+3. Xlen 需要的日志长度
+
+```
+index : 1   2   3   4
+S1      4   
+S2      4   6   6   6
+```
+
+S2发送AppendEntries到S1，内容为：
+
+```
+PrevLogIndex = 3
+PrevLogTerm = 6
+Entries[] = "6"
+```
+
+Follower收到后，发现冲突，返回：
+
+```
+Xterm = -1
+Xlen = 2
+```
+
+Leader收到后发现Follower的log[PrevLogIndex]没有日志，且Follower表示，从这个点开始往后Xlen的长度都没有日志存在，那么Leader会将nextIndex[s1]设置为`PrevLogIndex - Xlen + 1`。
+
+
 
