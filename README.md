@@ -31,3 +31,5 @@ C++学习经验 [C++](./C_plus_exp.md)
 [6.824 lab 2A](./Raft_lab2A.md)
 
 [6.824 lab 2B](./Raft_lab2B.md)
+
+[6.824 lab 2C](./Raft_lab2C.md)
