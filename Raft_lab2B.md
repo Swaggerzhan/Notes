@@ -274,11 +274,14 @@ func (rf *Raft)coroutineAppendEntries(index int, args* AppendEntriesArgs) {
 	// Follower同意同步日志
 	if reply.Success {
 	   // 这里是一个坑点！
-	   // 考虑使用以下代码再并发发送RPC时，由于网络请求延迟的情况，Leader多发送了一条
+	   // 考虑使用以下代码再并发发送RPC时，由于网络请求延迟的情况，先发的AE后到
 	   // 并且都被Follower接受了会如何？
-		//rf.nextIndex[index] += len(args.Entries)
-		rf.nextIndex[index] = args.PrevLogIndex + len(args.Entries) + 1
-		rf.matchIndex[index] = rf.nextIndex[index] - 1
+		//rf.nextIndex[index] = args.PrevLogIndex + len(args.Entries) + 1
+		//rf.matchIndex[index] = rf.nextIndex[index] - 1
+		if args.PrevLogIndex + len(args.Entries) >= nextIndex[index] {
+		    rf.nextIndex[index] = args.PrevLogIndex + len(args.Entries) + 1
+		    rf.matchIndex[index] = rf.nextIndex[index] - 1
+		}
 
 		sortedMatchIndex := make([]int, 0)
 		sortedMatchIndex = append(sortedMatchIndex, len(rf.log))
