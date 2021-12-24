@@ -24,7 +24,11 @@ C++学习经验 [C++](./C_plus_exp.md)
 
 [协程实现](./croutine.md)
 
+[并发编程](./concurrent.md)
+
 [C/C++的链接与装载是如何实现的](./Link.md)
+
+[6.824 ZooKeeper](./Zookeeper.md)
 
 [6.824 lab 1 MapReduce](./MapReduce.md)
 
@@ -33,3 +37,5 @@ C++学习经验 [C++](./C_plus_exp.md)
 [6.824 lab 2B](./Raft_lab2B.md)
 
 [6.824 lab 2C](./Raft_lab2C.md)
+
+[6.824 lab 3A](./Raft_lab3A.md)
