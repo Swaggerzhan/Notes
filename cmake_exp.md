@@ -40,7 +40,7 @@ target_link_libraries(MyProject test)	# 将libtest.so库添加到MyProject中
 
 ### 2. 生成静态链接库
 
-```shell
+```cmake
 add_library(
     message # 库名
     STATIC  # 生成库的方式，这里是静态链接库
@@ -52,6 +52,24 @@ add_library(
 其中的 __STATIC__ 字段也可以改为 __SHARED__ 表明生成动态链接库
 最后在编写cmake的时候先由源代码生成所谓的`目标文件`，之后再进行链接静态链接库
 `target_link_libraries(hello-world message)`。这里链接器会将其链接成一个可执行文件。
+
+### 安装库到指定文件夹中
+
+```cmake
+add_library(库名 file.h file.cpp ....)
+set(INSTALL_HEAD_FILES 需要安装的头文件)
+# 库
+install(
+    TARGETS 库名
+    ARCHIEVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib # 静态库安装
+    SHARED DESTINATION ${CMAKE_INSTALL_PREFIX}/lib   # 动态库安装
+)
+# 头文件
+install(
+    FILES ${INSTALL_HEAD_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX}/include
+)
+```
+
 
 ### 3. 条件语句
 
