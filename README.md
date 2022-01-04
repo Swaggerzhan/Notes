@@ -1,41 +1,64 @@
-GDB和服务器负载命令 [gdb and top](./gdbMan.md)
 
-C++学习经验 [C++](./C_plus_exp.md)
+# Record
 
-[C++11特性](./c_plus_11.md)
+## 0x00 语言及算法相关
 
-[C++ STL](./STL.md)
+[准备面试时刷的一些题目](./c++/algorithm.md)
 
-[Linux进程](./linux_process.md)
+[基础C++ 知识](./c++/C_plus_exp.md)
 
-[Linux线程](./linux_thread.md)
+[* C++11一些特性](./c++/c++.md)
 
-[Linux文件系统](./linux_file.md)
+[C++ STL](./c++/STL.md)
 
-[Linux信号量](./linux_signal.md)
+[* C/C++的静态及动态链接](./c++/Link.md)
 
-[IO复用](./linux_epoll.md)
+[* C/C++ ELF文件的装载过程](./c++/programmer_load_elf.md)
 
-[图像](./pictrue.md)
+[C++ 对象模型](./c++/objectModel.md)
 
-[TCP](./tcp_exp.md)
+[汇编](./c++/assemble.md)
 
-[汇编语言](./assemble.md)
+[GCC中一些参数](./c++/gcc.md)
 
-[协程实现](./croutine.md)
+## 0x01 Linux相关
 
-[并发编程](./concurrent.md)
+[Linux Epoll的使用](./linux/linux_epoll.md)
 
-[C/C++的链接与装载是如何实现的](./Link.md)
+[Linux signal机制](./linux/linux_signal.md)
 
-[6.824 ZooKeeper](./Zookeeper.md)
+[Linux thread使用基础](./linux/linux_thread.md)
 
-[6.824 lab 1 MapReduce](./MapReduce.md)
+[Linux 内存管理](./linux/linux_mem.md)
 
-[6.824 lab 2A](./Raft_lab2A.md)
+[Linux 文件管理](./linux/linux_file.md)
 
-[6.824 lab 2B](./Raft_lab2B.md)
 
-[6.824 lab 2C](./Raft_lab2C.md)
+## 0x02 other
 
-[6.824 lab 3A](./Raft_lab3A.md)
+[一些位运算](./other/bit.md)
+
+[cmake使用基础](./other/cmake_exp.md)
+
+[* 并发编程基础](./other/concurrent.md)
+
+[* TCP/IP](./other/tcp_exp.md)
+
+[GDB及服务器负载命令使用基础](./other/gdbMan.md)
+
+
+## 0x03 Raft
+
+[MapReduce基础](./Raft/MapReduce.md)
+
+[* 一致性协议](./Raft/consistency.md)
+
+[Raft Lab 2A](./Raft/Raft_lab2A.md)
+
+[* Raft Lab 2B](./Raft/Raft_lab2B.md)
+
+[Raft Lab 2C](./Raft/Raft_lab2C.md)
+
+[* Raft Lab 3A](./Raft/Raft_lab3A.md)
+
+[* Raft Lab 3B](./Raft/Raft_lab3B.md)

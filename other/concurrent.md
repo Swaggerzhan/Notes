@@ -89,3 +89,64 @@ Disruptor实现和kfifo很像，都是围绕一个ringBuffer来实现的，一�
 我这边简单写了一个Disruptor的[C++实现](https://github.com/Swaggerzhan/Raiden/blob/master/base/Disruptor.h)，是一个其中策略非常的简单(spin)，排除False Sharing后速度确实快了非常多，但对CPU的压力也不小，具体需要取决于业务需求。
 
 并且，采用Spin的策略在核心较少的处理器上可能会适得其反，在单核CPU中主动让出资源一直是比较好的选择。
+
+## 0x02 volatile以及原子变量
+
+C++中的volatile不同于JVM中的概念，它代表某个变量是易变的，volatile作用于编译器，多线程情况下不能使用volatile来做线程同步，这个是肯定的。至于volatile如何作用于编译器，我们可以看个小例子：
+
+```C++
+int a = 0;
+int do_something() {
+    while ( a > 1 );
+    return 1;
+}
+```
+
+在x86-64 gcc 10.1版本下编译，得到以下汇编：
+
+```assembly
+a:
+        .zero   4
+do_something():
+        push    rbp
+        mov     rbp, rsp
+.L3:
+        mov     eax, DWORD PTR a[rip]
+        cmp     eax, 1
+        jle     .L2
+        jmp     .L3
+.L2:
+        mov     eax, 1
+        pop     rbp
+        ret
+```
+
+可以看到，编译器“老老实实”的做了我们写的代码，事实上我们也确实希望编译器这样做， __但有些时候，我们想使用一些编译器的优化选项来提高代码的运行效率，并且降低执行文件的大小，当我们使用一些优化选项时，也就赋予了编译器一些“不老实”的权限，当通过`-Ofast`的优化选项后，相同的代码将得到以下汇编__ ：
+
+```assembly
+do_something():
+        mov     eax, 1
+        ret
+a:
+        .zero   4
+```
+
+可以看到输出的汇编少了很多，并且 __函数do_something()直接摆烂，这是因为编译器开始自作聪明了，它认为，既然`a=0`，那么while语句中的`a>1`就永远不会成立，那么也就永远不用运行，所以可以直接删除，即刻返回1，乍一看也没问题(单线程)，但代码一放到多线程情况下运行，那么a就有可能被其他线程改变进而执行while语句__ 。
+
+当我们使用volatile对a变量进行修饰后，同样开启-Ofast优化，得到汇编码：
+
+```assembly
+do_something():
+.L2:
+        mov     eax, DWORD PTR a[rip]
+        cmp     eax, 1
+        jg      .L2
+        mov     eax, 1
+        ret
+a:
+        .zero   4
+```
+
+可以看到，编译器对`a`这个变量又老实起来了。
+
+__注：volatile作用于编译器，对CPU来说是透明的，volatile变量不能作多线程下的同步__ ! CPU的结构导致多线程的原子变量同步需要考虑到内存序。

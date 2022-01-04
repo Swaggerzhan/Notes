@@ -397,11 +397,11 @@ class PROTOBUF_EXPORT MethodDescriptor : private internal::SymbolBase {
 
 `service()`当前方法所属`Service`。
 
-<font color=F#####>具体的使用场景: 多用与获取参数类型和响应类型，例如: </font>
+<font color=F#####>具体的使用场景: 多用于获取参数类型和响应类型，例如: </font>
 
 ```c++
 Message* request = service->GetRequestPrototype(methodDescriptor).New();
-Message* respond = service->GetRequestPrototype(methodDescriptor).New();
+Message* respond = service->GetRespondPrototype(methodDescriptor).New();
 ```
 
 ## 简单的RPC

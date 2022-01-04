@@ -85,6 +85,54 @@ long futex_wait(int* addr, int num){
 }
 ```
 
+### 0x02 Futex内核实现
+
+`futex`在内核态中有几个比较重要的数据结构，分别是`futex_key`、`futex_queues`、`futex_q`。
+
+一个进程\线程中可以使用多个`futex`，这就需要一个`东西`来识别不同的`futex`，在用户态，我们使用一个对其的整型变量，也就是在调用函数时传入的`int* uaddr`这个变量，在内核态，我们用`futex_key`来识别不同的`futex`。
+
+当我们调用`futex_wait`陷入到内核态中时，内核使用`futex_q`来保存数据，并将其成为一个节点，插入到`futex_queues`的链表当中去。
+
+`futex_queues`严格上讲不是一个链表，而是一个hashtable，hashtable里的每个元素hash_bucket才是链表。`futex_q`通过计算得出将放到哪个`hash_bucket`中，通过拉链法串起来。
+
+```c++
+struct futex_q{
+  struct list_head list;
+  struct task_struct *task; // 阻塞的任务
+  struct page* page;
+  unsigned int offset;
+};
+/*
+*	内核态中，我们通过 *page 和 offset 来确定表示符的位置
+*/
+atomic_t *count;
+count = kmap(page) + offset; // count 即为用户态传入的数值
+```
+
+```c
+union futex_key {
+  struct {
+    unsigned long pgoff;
+    struct inode *inode;
+    int offset;
+  } shared;
+  struct {
+    unsigned long address;
+    struct mm_struct *mm;
+    int offset;
+  } private;
+  struct {
+    unsigned long word;
+    void *ptr;
+    int offset;
+  } both;
+};
+```
+
+通过源代码我们可以得知，`futex_key`是一个共用体，其中有3种，我们将重点放到`shared`和`private`中。
+
+`shared`表示这个`futex`可以跨进程使用，而`private`则表示只能在同一个进程内进行使用。
+
 
 
 
