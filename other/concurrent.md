@@ -150,3 +150,70 @@ a:
 可以看到，编译器对`a`这个变量又老实起来了。
 
 __注：volatile作用于编译器，对CPU来说是透明的，volatile变量不能作多线程下的同步__ ! CPU的结构导致多线程的原子变量同步需要考虑到内存序。
+
+## 0x03 屏障 & 内存序
+
+多线程编程下，内存屏障及内存序算是比较重要的基础了。
+
+### 编译器屏障之volatile
+
+之前讨论的volatile就算是一种编译器屏障，这里再次扩展深入，考虑这样一段代码:
+
+```C++
+#include <unistd.h>
+#include <thread>
+
+int flag = 0;
+
+void wakeup() {
+    flag = 1;
+}
+
+void wait() {
+    while ( flag == 0 );
+}
+
+int main() {
+    std::thread t(wait);
+    sleep(1);
+    wakeup();
+    t.join();
+}
+```
+
+代码很简单，主线程创建一个wait子线程，wait子线程一直判断flag是否为0(这里先不讨论这个flag是不是原子变量)，而主线程在某个时间段，试着将flag修改为1，子线程察觉到flag改变了，子线程退出while进而结束线程。
+
+问题发生在哪？如果不启用编译器优化，似乎也没毛病，一旦启动优化，编译器又开始自作聪明了，在`-O`优化下(gcc x86-64 10.1)，wait处代码编译后得到以下汇编：
+
+```assemble
+wait():
+        mov     eax, DWORD PTR flag[rip]
+.L2:
+        test    eax, eax
+        je      .L2
+        mov     eax, 1
+        ret
+```
+
+问题即出在 __test eax, eax__ ，__编译器认为，寄存器的访问速度是要优于内存的，所以索性直接访问寄存器(单线程没毛病)，那么当主线程修改flag内存处的值后，子线程仍使用寄存器中的值(旧值)来进行比对，永远都无法退出while，而如果该变量用volatile修饰，则要求编译器遇到这个变量必须到对应的内存处重新取值，从而可以拿到新值，但再次强调，C++中的线程间同步不能使用volatile变量__ 。
+
+
+### CPU屏障
+
+前置知识：MESI协议
+
+首先是CPU的缓存以内存一致性的问题，在多核CPU中，一个核心如果要修改某个Invalid状态的Cache Line，需要以下步骤：
+
+1. 给其他核心发送Invalid消息。
+2. 把当前需要写入的数据先写到Store Buffer当中。
+3. 某个时刻(异步)，再将Store Buffer中的数据刷新到Cache Line中。
+
+这样的3个步骤，可以不必等待，快速的完成，毕竟对于CPU缓存的读写是非常迅速的，但这也带来了一些一致性的问题。
+
+本核心的一致性问题很好解决，当需要读取一个数据时，只需要看看Store Buffer再去看Cache Line就可以得到最新的数据了。
+
+其他核心在收到Invalid消息后，将消息写入Invalid Queue中，然后异步的设置那条Cache Line为Invalid，和Store Buffer不同的是，其他核心在读取的时候不查看Invalid Queue，这也造成了可能存在极短时间内出现数据不一致。
+
+
+
+

@@ -40,6 +40,8 @@
 
 [cmake使用基础](./other/cmake_exp.md)
 
+[* MESI](./other/MESI.md)
+
 [* 并发编程基础](./other/concurrent.md)
 
 [* TCP/IP](./other/tcp_exp.md)
