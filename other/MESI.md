@@ -461,4 +461,4 @@ Read Response可以从主存发出，也可以从某个core的Cache中发出，�
 
 ## 0x06 最后
 
-[内存屏障](./concurrent#0x03Barrier)
+[内存屏障](./concurrent.md#0x03-barrier)
