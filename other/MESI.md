@@ -1,23 +1,23 @@
-# MESI
+# MESI缓存一致性协议
 
 ## 0x00 基础
 
-MESI分别表示了4种缓存状态，为`M(Modify exclusive)`、`E(Exclusive)`、`S(Shared)`、`I(invalid)`。
+MESI 4个字母分别表示了4种缓存状态，为 __M(Modify exclusive)、E(Exclusive)、S(Shared)、I(invalid)__ 。
 
 具体含义为：
 
 ### M(Modify exclusive)
 
-即修改的，当前Cache Line数据和对应的内存数据不同，只有当前core在使用此内存数据(独享)。
+即 __修改且独享__ 的，当前Cache Line数据和对应的内存数据 __不同__ ，只有 __当前core__ 在使用此内存数据(独享)。
 
 
 ### E(Exclusive)
 
-即独享的，当前Cache Line数据和对应的内存数据相同，只有当前core在使用此内存数据(独享)。
+即 __独享__ 的，当前Cache Line数据和对应的内存数据 __相同__ ，只有 __当前core__ 在使用此内存数据(独享)。
 
 ### S(Shared)
 
-即共享的，当前Cache Line数据和对应的内存数据相同，多个core都在使用此内存数据，也就是多个core中的Cache Line都有此内存数据的高缓(共享)。
+即 __共享__ 的，当前Cache Line数据和对应的内存数据 __相同__ ， __多个core__ 都在使用此内存数据，也就是多个core中的Cache Line都有此内存数据的高缓(共享)。
 
 ### I(Invalid)
 
@@ -407,26 +407,58 @@ int main() {
  cout << "PASS" << endl;
 }
 ```
-## 0x03 消息机制
+## 0x03 监听任务
 
-// TODO: update....
+现代CPU架构(smp大部分吧应该)必须在总线上监听某种状态，具体为：
 
-MESI中的6种消息
+### M : 
 
-* Read
-    读取请求，包括要读取的主存地址
+当一个处于此状态的缓存行，必须时刻监听 __所有__ 试图读取该缓存行对应的主存地址的操作，如果一旦监听到，则执行write back操作。
 
-* Read Respond
-    读取请求的响应，可能来自主存或者是其他CPU，其中包含了请求的数据，并且收到此请求的CPU会将数据放到Cache Line中。
-    
-* Invalidate
-    其中包含一个失效的主存地址，收到此消息的CPU将在对应的Cache Line中移除这个主存地址的数据，并且回复Invalidate Acknowledge。
-    
-* Invalidate Acknowledge
-    收到Invalidate后移除对应Cache Line后响应。
-    
-* Read Invalidate
-    Read和Invalidate两者结合
-    
-* WriteBack
-    
+### E : 
+
+当存在一个处于此状态的缓存行，必须时刻监听总线上的所有试图读取此缓存对应的主存地址的操作，如果一旦监听到，则将此状态设置为S(Exclusive -> Shared)。
+
+### S :
+
+当存在一个处于此状态的缓存行，必须在总线上时刻监听使该缓存行 __无效或者独享__ 该缓存行的请求，如果监听到，则执行将此状态设置为I(Shared -> Invalid)。
+
+## 0x04 消息机制
+
+
+MESI中存在6种消息，分请求和相应，它们在总线上传递，可能由Cache发出，也可能由主存发出。
+
+
+### Read 请求
+
+通知其他core，当前core准备读取某个主存数据，消息包含这个待读取的主存数据的地址。
+
+### Read Response 响应
+
+Read Response可以从主存发出，也可以从某个core的Cache中发出，包含Read请求的内存数据。
+
+### Invalidate 请求
+
+通知其他core，请求中携带一个主存地址，令其他core将此主存地址对应的Cache Line状态设置为Invalid(无效)。
+
+### Invalidate Acknowledge 响应
+
+收到Invalidate并且处理完请求后的core需要回复这个响应，表示已经完成操作。
+
+### Read Invalidate 请求
+
+这是一个复合请求，同时携带Read和Invalidate，发出此消息一般当前core试图更新某个数据，此消息要求收到的core响应一个Read Response后删除对应Cahce，然后再响应一个Invalidate Acknowledge，发送次消息的处理器期望收到一个Read Response以及多个Invalidate Acknowledge。
+
+### Writeback 请求
+
+该消息包含需要写入主存的数据以及其对应的内存地址，该消息仅在Cache Line状态为Modify状态发出。
+
+
+## 0x05 例子
+
+// TODO: wait for update...
+
+
+## 0x06 最后
+
+[内存屏障](./concurrent#0x03Barrier)
