@@ -223,19 +223,19 @@ assert( b == 2 );
 
 其中a在其他的CPU高缓中，b在当前的CPU高缓中，它们初始值都为0，则执行过程：
 
-1. 当前的CPU发现a不在当前高缓中，执行完a=1后，向其他CPU发送Read Invalidate消息。
-2. 当前的CPU直接将a=1写入Store Buffer，企图去执行其他指令。
-3. 其他CPU收到了Read Invalidate消息，响应了Read Response，并且删除对应缓存。
+1. 当前的CPU发现a不在当前高缓中，执行完a=1前，向其他CPU发送Read Invalidate消息。
+2. 当前的CPU不等待响应，直接将a=1写入Store Buffer，企图去执行其他指令。
+3. 其他CPU收到了Read Invalidate消息，响应了Read Response，并且删除对应缓存行。
 4. 当前的CPU执行b=a+1，此时还是需要a的数据。
-5. 当前的CPU终于收到了其他CPU发出的Read Response，将a=0写入高缓，状态为E，顺利执行了b=a+1，得到b=1。
-6. 当前CPU发现b在缓存行中属于Exclusive状态，故直接写入b=1，并且将其缓存行状态修改为Modify。
+5. 当前的CPU终于收到了其他CPU发出的Read Response以及Acknowledge响应，将a=0写入高缓，状态为E，顺利执行了b=a+1，得到结果b=1。
+6. 当前CPU发现b在缓存行中存在，且属于Exclusive状态，故直接写入b=1，并且将其缓存行状态修改为Modify。
 7. 当前CPU将Stroe Buffer中的a=1写入到缓存中(当前CPU中a高缓状态为E，可写，写完后状态为M)。
 
-可以看到流程走完后，由于Store Buffer的存在，指令发生了重排，b = a + 1提前发生了，导致了最后assert失败。
+可以看到流程走完后，由于Store Buffer的存在，发生了指令重排(b=a+1 happend before a=1)，导致了最终的assert失败。
 
 ### 增加Store Forwarding
 
-Store Forwading规定，每次载入数据时，一起查看Store Buffer和Cache Line，这样就能得到最新的数据了，情况是这样的吗？考虑这样一段代码：
+Store Forwading规定，每次载入数据时，一起查看Store Buffer和Cache Line，这样就能得到最新的数据了(上述的例子中，如果CPU看一眼Store Buffer，那么就能知道a的最新数据是1)，情况是这样的吗？考虑这样一段代码：
 
 ```C++
 void CPU0() {
@@ -249,7 +249,7 @@ void CPU1() {
 }
 ```
 
-a和b初始值都为0，并且a在CPU1的高缓中，b在CPU0的高缓中，执行步骤为：
+a和b初始值都为0，并且a在CPU1的高缓中，b在CPU0的高缓中，让不同的CPU执行各自的函数，过程：
 
 1. CPU0执行a=1的操作，发现不在其高缓中，发送Read Invalidate请求(Cache Miss)，同时直接将a=1写入Store Buffer。
 2. CPU1执行while，发现其高缓中不存在b，发送Read请求(Cache Miss)。
@@ -258,25 +258,25 @@ a和b初始值都为0，并且a在CPU1的高缓中，b在CPU0的高缓中，执�
 5. CPU1收到Read Response，得到b=1，while循环退出。
 6. CPU1执行assert，发现a存在其高缓中，值为0，assert失败。(Read Invalidate还未被CPU1收到，即使CPU1收到了，并且将a高缓设置为失效，并且重新发起了Read请求，也可能得到同样a=0的结果，因为CPU0并未将Store Buffer中数据更新到Cache中)
 
-可以发现，加入了Store Forwarding后，最终结果还是出现了歧义，在CPU0看来，指令没有发生重排，这里解释一下“重排”，在单线程情况下看CPU0执行过程，我们认为b=1时，a必定等同于1，这是必然的，也是我们希望看到的，可惜的是并行情况下，结果令我们失望。
+可以发现，加入了Store Forwarding后，最终结果还是出现了歧义，在CPU0看来，指令没有发生重排，CPU0确实先执行了a=1，然后才是b=1。这里解释一下“重排”，在单线程情况下看CPU0执行过程，我们认为b=1时，a必定等同于1，这是必然的，也是我们希望看到的，可惜的是结果令我们失望。
 
 __CPU0认为，写入Store Buffer和写入Cache Line都是写入成功，因为CPU0可以通过Store Forwarding来同时读取两块缓存从而得到最新数据，而CPU1认为，只有写入Cache Line才算写入成功(CPU1看不到CPU0中的Store Buffer)，以CPU1的视角看，指令还是发生了重排__ !
 
 ### 屏障
 
-很可惜的，现代CPU无法做到顺序一致性(强一致性)，我们只能通过内存屏障来避免指令重排的发生，这也是屏障存在的意义。
+很可惜的，现代CPU无法做到顺序一致性(强一致性)，对于上述问题，我们只能通过内存屏障来避免指令重排的发生，这也是屏障存在的意义。
 
 首先是smp_mb()，它要求 __执行后面的语句的前提__ 是 __需要将Store Buffer中的数据处理完(即使smp_mb()语句后的一些数据在高缓中，且状态为E或者M)__ ，在满足这个要求的情况下，CPU有以下策略可以选择：
 
-1. CPU停下来，将Store Buffer中所有数据都更新到Cache中，但这意味着CPU需要等待一些MESI消息的响应，速度必然受到影响。
+1. CPU停下来，将Store Buffer中所有数据都更新到Cache中，这意味着CPU需要等待一些MESI消息的响应，速度必然受到影响。
 2. CPU不停下，将smp_mb()后的数据也一并写入Store Buffer中，但作出一个保证， __即:在将smp_mb()后的指令结果从Store Buffer写入到Cache中时，先更新smp_mb()之前的__ 。
 
-毫无疑问，现代CPU使用了后者策略，这样以来，我们上以上代码稍微修改，得到：
+毫无疑问，现代CPU使用了后者策略，这样以来，将上述代码稍微修改，得到：
 
 ```C++
 void CPU0() { // cache has b
     a = 1;
-    smp_mb();
+    smp_mb(); // barrier! make sure `a=1` happend before `b=1`
     b = 1;
 }
 
@@ -305,10 +305,15 @@ void CPU1() { // cache has a
 
 可以看到，程序通过了assert，通过内存屏障，CPU“可以”做到顺序一致性。
 
-### 屏障指令
+### 更松垮的内存屏障
+
+smp_mb()内存屏障太强了，以至于能够实现“强一致性”(顺序一致性)，这也导致了速度的降低，或许，有没有一种比较松垮的内存屏障，既能按照我们想的方式运行程序，又能最大限度的提高CPU的运行效率？
+
+Intel给出了3种内存屏障指令：
+
 // TODO: wait for upate...
 
-## 0x04 C++内存顺序
+## 0x04 C++的6种内存顺序
 
 // TODO: wait for upate....
 
