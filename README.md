@@ -40,9 +40,9 @@
 
 [cmake使用基础](./other/cmake_exp.md)
 
-[* MESI](./other/MESI.md)
+[* MESI缓存一致性协议](./other/MESI.md)
 
-[* 并发编程基础](./other/concurrent.md)
+[* 并发编程基础及内存屏障](./other/concurrent.md)
 
 [* TCP/IP](./other/tcp_exp.md)
 
