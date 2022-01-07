@@ -229,7 +229,169 @@ int main() {
 
 可以看到，当我们调用handleBuffer时采用的是值传递方式，进而触发拷贝函数，生成2个副本，不过我们可以通过std::move将其转为“右值”，然后再通过移动构造函数(13行)将其“偷掉”，在32行之后，b变量就不能够再使用了，其内部的data_指针已为空。
 
-// TODO: 待更新。。。
+// TODO: wait for update...
+
+
+## 0x03 回调函数问题
+
+
+### 多线程内存管理问题
+
+在C++中对内存的管理一直是一个比较重要的问题，如果写的程序是单线程，那管理内存似乎会简单些许，但现实中我们总会写多线程程序，在多线程下对一块内存的管理就复杂了许多，特别是关乎类的构造及析构，情况会更加复杂。
+
+竞态问题我们会马上想到某个东西，锁，是啊，锁可以解决竞态问题，比如这样一个类:
+
+```C++
+class Obj {
+public:
+    void read(){
+        // lock
+        std::unique_lock<std::mutex> lockGuard(mutex_);
+        // do something...
+    }
+
+private:
+    std::mutex mutex_;
+};
+```
+
+看起来解决了，但忽略了构造和析构，构造好解决，或许我们可以用二段式构造？或许还有其他解决方法，但析构是个麻烦事，mutex_会在析构中被删除，而mutex_是应该保护函数安全运行的啊！似乎进入了死循环。
+
+### 使用智能指针
+
+我在看muduo网络库的时候就遇到了这个问题，代码中，TcpServer拥有TcpConnection，并且TcpConnection中拥有Channel，&Channel::handleEvent会在事件触发时被调用(epoll)，这本身没问题，问题发生在Tcp连接关闭事件，&Channel::handleEvent会企图调用关闭函数，关闭函数中需要删除TcpConnection，结果灾难发生了，TcpConnection拥有Channel，这意味着TcpConnection被删除后，Channel也不复存在，但我们现在正在使用Channel中的handleEvent函数啊！
+
+原先，TcpConnection中拥有Channel的shared_ptr，引用为1，当TcpConnection被析构后，Channel也被析构，所以我们需要想办法延长Channel的寿命使得handleEvent顺利结束，怎么做？想办法让TcpConnection不要那么快的消亡，在handleEvent中获得一个指向TcpConnection的shared_ptr，使得引用最少为1，并且持续到&Channel::handleEvent结束为止，这听起来有点像左脚踩右脚上天，但这个方法确实可行，muduo就是这样解决的。
+
+缩减部分代码得到如下例子：
+
+```C++
+/* Shared_test.h */
+#include <functional>
+#include <iostream>
+#include <map>
+
+using std::cout;
+using std::endl;
+
+class TcpConnection;
+class Channel;
+
+typedef std::function<void(int)> TcpServerCloseCallback;
+
+class TcpServer {
+public:
+
+  // 将被当成回调注册进Channel，目的是删除TcpConnection
+  void closeConnections(int fd);
+  void newConnection(int fd);
+
+private:
+  // fd -> TcpConnection
+  std::map<int, std::shared_ptr<TcpConnection>> connections_;
+
+};
+
+class TcpConnection : public std::enable_shared_from_this<TcpConnection>{
+public:
+  void setTcpServerCloseCallback(TcpServerCloseCallback);
+  void init(int fd);
+
+private:
+  std::shared_ptr<Channel> channel_;
+  TcpServerCloseCallback tcpServerCloseCallback_;
+};
+
+class Channel {
+public:
+
+  // 事件触发时调用，可能会调用关闭回调
+  void handleEvent();
+  void setCloseEventCallback(TcpServerCloseCallback cb);
+  void setFd(int fd);
+  // important
+  void tie(const std::shared_ptr<void>& conn);
+
+private:
+  int fd_;
+  TcpServerCloseCallback tcpServerCloseEventCallback_;
+  
+  // for tie
+  std::weak_ptr<void> tie_;
+};
+```
+
+```C++
+/* Shared_test.cc */
+#include "Shared_test.h"
+#include <cassert>
+#include <cstring>
+
+void TcpServer::closeConnections(int fd) {
+  auto it = connections_.find(fd);
+  assert ( it != connections_.end() );
+  connections_.erase(it); // remove it!
+}
+
+void TcpServer::newConnection(int fd) {
+  TcpConnection* conn = new TcpConnection;
+  std::shared_ptr<TcpConnection> pConn(conn);
+  pConn->setTcpServerCloseCallback(
+          std::bind(&TcpServer::closeConnections, this, std::placeholders::_1)
+          );
+  pConn->init(fd);
+  connections_[fd] = pConn;
+}
+
+bool TcpServer::hasChannel(int fd) {
+  auto it = connections_.find(fd);
+  if (it == connections_.end()) {
+    return false;
+  }
+  return true;
+}
+
+
+// ************** TcpConnection **************
+void TcpConnection::init(int fd) {
+  rawPointer_ = new Channel;
+  channel_ = std::shared_ptr<Channel>(rawPointer_);
+  channel_->setCloseEventCallback(tcpServerCloseCallback_);
+  channel_->setFd(fd);
+  channel_->tie(shared_from_this()); // for tie
+}
+
+void TcpConnection::setTcpServerCloseCallback(TcpServerCloseCallback cb) {
+  tcpServerCloseCallback_ = std::move(cb);
+}
+
+// ************** Channel **************
+void Channel::handleEvent() {
+  std::shared_ptr<void> lock = tie_.lock(); // tie! count=2
+  tcpServerCloseEventCallback_(fd_); // remove ok, count=1
+}
+
+void Channel::setCloseEventCallback(TcpServerCloseCallback cb) {
+  tcpServerCloseEventCallback_ = std::move(cb);
+}
+
+void Channel::setFd(int fd) {
+  fd_ = fd;
+}
+
+void Channel::tie(const std::shared_ptr<void>& conn) {
+  tie_ = conn; // weak_ptr
+}
+```
+
+具体调用栈则为&Channel::handleEvent被触发，当发生关闭事件时，提升其中的weak_ptr，使TcpConnection的引用计数变为2，然后进入TcpServer的删除回调，从connctions_中擦除对应的TcpConnction，此时计数降至1，回调结束后函数栈跳回&Channel::handleEvent，当handleEvent退出后，引用计数降至0，TcpConnection被释放。
+
+### std::bind的中的this裸指针问题？
+
+// TODO: wait for update...
+
+
+
 
 
 
