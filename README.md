@@ -69,6 +69,8 @@
 
 [LSM Tree](./database/lsm.md)
 
+[CS265课程中实现的小型LSMTree项目](./database/cs265_LSMTree.md)
+
 [跳表](./database/skiplist.md)
 
 [文件系统](./database/filesystem.md)
