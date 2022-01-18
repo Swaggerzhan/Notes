@@ -206,15 +206,15 @@ Run* LSMTree::get_run(int index) {
 
 > case one:
 
-仅仅是Level0满，而Level1中的runs_并未达到最大值，那么非常简单，直接生成一个新的Run，插到Level1头部即可，然后将Level0，也就是Buffer的数据丢给新创建的Run，由这个Run将数据排序并且Flush到磁盘中即可，然后我们请空Buffer，执行put操作即可。
+仅仅是Level0满，而Level1中的runs_并未达到最大值，那么非常简单，直接生成一个新的Run，插到Level1头部即可，然后将Level0，也就是Buffer的数据丢给新创建的Run，由这个Run将数据排序并且Flush到磁盘中即可，然后我们请空Buffer，执行put操作。
 
 > case two:
 
-Level1中的runs_也满，那么我们不得不的进行Merge了，我们将Level1中的所有Run都取出，然后进行合并，合并的优先级是越往前越新，这是我们规定的，相同的key，越往后的Run中的key将被靠前的Run中的key所覆盖，这样能确保我们获取到的数据是最新数据(up to date)。
+Level1中的runs_也满，那么我们不得不的进行Merge了，我们将Level1中的所有Run都取出，然后进行合并，合并的优先级是越往前越新，这是我们规定的，相同的key，越往后的Run中的key将被靠前的Run中的key所覆盖，这样能确保Merge后key中数据是最新数据(up to date)。
 
 > case three:
 
-执行Level2或者Level3中的数据都满了，那么我们只能递归的进行这项操作了，具体操作如同case two，不过这个层数并不是越来越高的，我们可以将其限制在某个层数，比如像Leveldb那样，在Level7上，不限制Run的大小。
+执行Level2或者Level3中的数据都满了，那么我们只能递归的进行这项操作了，具体操作如同case two，不过这个层数并不是越来越高的，我们可以将其限制在某个层数，比如像Leveldb那样，在Level7上，不限制runs_的大小。
 
 __无论我们如何进行Merge操作，最终Level1上总是有一个可用的空间可以用来存放新的Run__ 。
 
@@ -261,6 +261,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 目前项目还未做到多线程的查询操作，如果发生Merge操作，那么整个数据库都将被阻塞，以及缺少布隆过滤器，磁盘快速索引等等，后续如果有时间将实现多线程的、包含布隆过滤器的、有磁盘索引的版本，在此留坑。
 
 课程地址：[这里](http://daslab.seas.harvard.edu/classes/cs265/project.html)
+
 参考项目：[这里](https://github.com/jackdent/cs265-lsm-tree)
 
 </font>
