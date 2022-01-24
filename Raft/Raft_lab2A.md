@@ -30,7 +30,7 @@ LogEntry就是集群一致的手段，Leader通过发送LogEntry来强制同步�
 
 并且论文5.4.1中有说明了关于选举限制的东西，如果一个Node想要成为Leader，那么这个Node就必须拥有所有已经commit的日志，我们不允许commit后的日志被丢弃！具体详见[lab2B](./Raft_lab2B.md)
 
-### Follower 需要做的
+### Follower 需要做的：
 
 在Lab2A中，Follower要做的东西非常的少：
 
@@ -40,8 +40,14 @@ LogEntry就是集群一致的手段，Leader通过发送LogEntry来强制同步�
 
 * 收到RequestVoteRPC后，判断是否同意投票即可。
 
-在Lab2A中，还没有必要进行日志选举限制，所以我们只需要记住一个Node只能投一票即可。
+在Lab2A中，还没有必要进行日志选举限制，所以我们只需要记住一个Node在一个Term只能投一票即可。
 
+* 收到AppendEntry，也就是心跳后，重置定时的超时时间。
+
+
+### Leader 需要做的：
+
+* 发送日志，也就是心跳，这是一个固定时间，比如100ms。
 
 ## 0x01 代码实现
 
