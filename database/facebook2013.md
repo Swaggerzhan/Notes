@@ -80,7 +80,7 @@ func write(key xxx, value xxx) {
 
 或者我们会想到，先实现delete掉Memcached，然后再写库？然而这种情况存在相同的问题。
 
-又或者，是否可以用update scheme?，比如这样：
+又或者，是否可以用update scheme? 比如这样：
 
 ```go
 func write(key xxx, value xxx) {
@@ -114,7 +114,7 @@ c1: set_to_memcached(x, 1)
 
 ### 集群加入
 
-在多集群的设计下，有时候，我们希望添加新的集群以提高性能，但新的集群在加入的时候，其内部的Memcached是空的，这就意味着是100%的Cache miss，所有的请求都将落到DB上，而DB显然具备这种等级的写入。
+在多集群的设计下，有时候，我们希望添加新的集群以提高性能，但新的集群在加入的时候，其内部的Memcached是空的，这就意味着是100%的Cache miss，所有的请求都将落到DB上，而DB显然不具备这种等级的写入。
 
 facebook采用的是“冷启动”，即对新的集群中的Memcached进行标记，当访问到标记Memcached并且Cache miss后，FE并不会立刻访问DB，而是会到其他的集群Memcached中进行访问，如果也出现Cache miss才会访问DB，而如果Cache hit(其他集群中的Memcached)，那么FE会将访问到的结果记录到被标记的Memcached中(本地集群中的Memcached)，当以这种“冷启动”运行一段时间后，被标记的Memcached会缓存一定量的数据，然后再将标记去除。
 
@@ -126,17 +126,19 @@ facebook采用的是“冷启动”，即对新的集群中的Memcached进行标
 
 >FE对某个数据进行数据获取，并且cache miss时，Memcached会对这个key进行一个标记，这里直接记`L`，Memcached会记住这个标记，只有获取数据的FE和Memcached会有这个标记。
 
->FE从DB中获取数据之后，FE带着这个`L`标记去访问Memcached，Memcached比对通过后缓存对应的数据，然后删除这个`L`标记。
+>FE从DB中获取数据之后，FE带着这个`L`标记去访问Memcached并且执行set操作，Memcached比对通过后缓存对应的数据，然后删除这个`L`标记。
 
->其他FE如果尝试获取相同的数据，Memcached会察觉已经有其他FE在对DB访问相同的key，那么Memcached会告诉FE等待一段时间后再继续获取。
+>其他FE如果尝试获取相同的数据，Memcached会通过`L`标记察觉已经有其他FE在对DB访问相同的key，那么Memcached会告诉FE等待一段时间后再继续获取。
 
 >`L`标记持续一段时间后会超时自动删除。
 
 >delete操作会使得对应的key上的`L`标记被清除。
 
+>只有`L`比对通过，Memcached才允许进行set操作。
+
 ### 竞态
 
-LEASE机制其实也解决了竞态的一些问题，假设没有LEASE机制，那么可能存在以下顺序：
+LEASE机制其实也解决了竞态的一些问题，假设没有LEASE机制，那么可能存在以下执行顺序：
 
 ```
 c1: get_from_memcached(key) -> miss
@@ -156,6 +158,6 @@ c2: delete_to_memcached(key) -> 使L失效
 c1: set_to_memcached(key, v) -> 无法通过检查
 ```
 
-即使set先到达memcached，之后的delete总会到达，同样会删除过时的数据，这种极其短的时间数据不一致在facebook看来是可以接受的。
+即使set先到达memcached，之后的delete总会到达，同样会删除过时的数据，这种极短时间内的数据不一致在facebook看来是可以接受的。
 
 </font>
