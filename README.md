@@ -65,6 +65,8 @@
 
 [* Raft Lab 3B](./Raft/Raft_lab3B.md)
 
+[* Raft Lab 4A](./Raft/Raft_lab4A.md)
+
 ## 0x04 Database
 
 [LSM Tree](./database/lsm.md)
@@ -76,6 +78,8 @@
 [文件系统](./database/filesystem.md)
 
 [cmu15-445 Lab1](./database/cmu15-445-lab1.md)
+
+[读 Scaling Memcached at Facebook 笔记](./database/facebook2013.md)
 
 ## 0x05 一些项目
 
