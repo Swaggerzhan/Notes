@@ -48,6 +48,8 @@
 
 [GDB及服务器负载命令使用基础](./other/gdbMan.md)
 
+[brpc和braft编译](./other/brpc_install.md)
+
 
 ## 0x03 Raft
 
