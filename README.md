@@ -50,6 +50,8 @@
 
 [brpc和braft编译](./other/brpc_install.md)
 
+[CSAPP笔记](./other/dict.md)
+
 
 ## 0x03 Raft
 
