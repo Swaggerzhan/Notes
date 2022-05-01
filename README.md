@@ -1,3 +1,4 @@
+<font face="Monaco">
 
 # Record
 
@@ -90,8 +91,16 @@
 
 [由C++实现的支持MVCC的内存KV数据库](./database/mvcc.md)
 
-## 0x05 一些项目
+## 0x05 操作系统
+
+[6.S081 lab环境搭建](./6.S081/env.md)
+
+## 0x06 一些项目
 
 [Disruptor实现的异步日志](https://github.com/Swaggerzhan/AsyncLog)
 
 [定时器](https://github.com/Swaggerzhan/Timer)
+
+
+
+</font>
