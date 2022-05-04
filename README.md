@@ -93,7 +93,9 @@
 
 ## 0x05 操作系统
 
-[6.S081 lab环境搭建](./6.S081/env.md)
+[6.S081 lab: 环境搭建](./6.S081/env.md)
+
+[6.S081 lab: syscall](./6.S081/syscall.md)
 
 [6.S081 笔记：isolation & system call](./6.S081/trap.md)
 
