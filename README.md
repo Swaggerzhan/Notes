@@ -95,6 +95,8 @@
 
 [6.S081 lab环境搭建](./6.S081/env.md)
 
+[6.S081 笔记：isolation & system call](./6.S081/trap.md)
+
 ## 0x06 一些项目
 
 [Disruptor实现的异步日志](https://github.com/Swaggerzhan/AsyncLog)
