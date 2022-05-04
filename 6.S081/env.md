@@ -4,7 +4,7 @@
 
 OS: ubuntu20.04 LTS
 
-## 0x00 安装qeme之前的环境检查
+## 0x00 安装qemu之前的环境检查
 
 是否有libgcc.a库
 
@@ -28,7 +28,7 @@ sudo apt install gcc-multilib
 git clone https://github.com/mit-pdos/6.828-qemu.git qemu
 ```
 
-或者也可以直接到[官网:https://www.qemu.org/download/](https://www.qemu.org/download/)进行下载。
+或者也可以直接到[官网:https://www.qemu.org/download/](https://www.qemu.org/download/)进行下载，这里最好下5.1版本和之前的，不然可能会出现make qemu后卡住的问题。
 
 如果出现：
 
@@ -128,7 +128,7 @@ riscv64-unknown-linux-gnu-gcc --version
 ```
 
 ```shell
-git clone https://github.com/mit-pdos/xv6-riscv.git
+git clone git://g.csail.mit.edu/xv6-labs-2021
 cd xv6-riscv
 make
 make qemu
