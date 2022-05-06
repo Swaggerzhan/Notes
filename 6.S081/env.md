@@ -116,7 +116,7 @@ source ~/.bashrc
 riscv64-unknown-elf-gcc -v
 ```
 
-## 0x03 运行xv6
+## 0x03 运行xv6和调试
 
 安装环境检测：
 
@@ -132,6 +132,19 @@ git clone git://g.csail.mit.edu/xv6-labs-2021
 cd xv6-riscv
 make
 make qemu
+```
+
+调试需先运行gdbserver
+
+```shell
+make qemu-gdb
+```
+
+然后再去链接：
+
+```shell
+riscv64-unknown-elf-gdb kernel/kernel
+target remote IP:port
 ```
 
 

@@ -99,6 +99,8 @@
 
 [6.S081 笔记：isolation & system call](./6.S081/trap.md)
 
+[6.S081 笔记：threads switch](./6.S081/thread.md)
+
 ## 0x06 一些项目
 
 [Disruptor实现的异步日志](https://github.com/Swaggerzhan/AsyncLog)
