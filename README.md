@@ -103,6 +103,8 @@
 
 [6.S081 笔记：threads switch](./6.S081/thread.md)
 
+[6.S081 笔记：proc exit & sleep](./6.S081/sleep_lock.md)
+
 
 ## 0x06 一些项目
 
