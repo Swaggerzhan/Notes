@@ -20,8 +20,6 @@
 
 [汇编](./c++/assemble.md)
 
-[GCC中一些参数](./c++/gcc.md)
-
 ## 0x01 Linux相关
 
 [Linux Epoll的使用](./linux/linux_epoll.md)
@@ -104,6 +102,10 @@
 [6.S081 笔记：threads switch](./6.S081/thread.md)
 
 [6.S081 笔记：proc exit & sleep](./6.S081/sleep_lock.md)
+
+[gcc参数和makefile](./6.S081/cc.md)
+
+[Linux下ELF的静&动态链接&load](./6.S081/link.md)
 
 
 ## 0x06 一些项目
