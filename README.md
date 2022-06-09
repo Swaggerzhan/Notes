@@ -105,6 +105,8 @@
 
 [6.S081 笔记：file system](./6.S081/file_sys.md)
 
+[ RCU 笔记 ](./6.S081/rcu.md) 
+
 [gcc参数和makefile](./6.S081/cc.md)
 
 [Linux下ELF的静&动态链接&load](./6.S081/link.md)
