@@ -49,6 +49,8 @@
 
 [brpc和braft编译](./other/brpc_install.md)
 
+[brpc resource pool笔记](./brpc/resource_pool.md)
+
 [CSAPP笔记](./other/dict.md)
 
 
