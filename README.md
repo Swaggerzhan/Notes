@@ -51,6 +51,8 @@
 
 [brpc resource pool笔记](./brpc/resource_pool.md)
 
+[brpc socket笔记](./brpc/socket.md)
+
 [CSAPP笔记](./other/dict.md)
 
 
