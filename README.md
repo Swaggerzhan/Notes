@@ -55,6 +55,8 @@
 
 [brpc socket笔记](./brpc/socket.md)
 
+[brpc bthread笔记](./brpc/bthread.md)
+
 [CSAPP笔记](./other/dict.md)
 
 
