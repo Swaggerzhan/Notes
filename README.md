@@ -8,13 +8,13 @@
 
 [基础C++ 知识](./c++/C_plus_exp.md)
 
-[* C++11一些特性](./c++/c++.md)
+[C++11一些特性](./c++/c++.md)
 
 [C++ STL](./c++/STL.md)
 
-[* C/C++的静态及动态链接](./c++/Link.md)
+[C/C++的静态及动态链接](./c++/Link.md)
 
-[* C/C++ ELF文件的装载过程](./c++/programmer_load_elf.md)
+[C/C++ ELF文件的装载过程](./c++/programmer_load_elf.md)
 
 [C++ 对象模型](./c++/objectModel.md)
 
@@ -41,11 +41,11 @@
 
 [cmake使用基础](./other/cmake_exp.md)
 
-[* MESI缓存一致性协议](./other/MESI.md)
+[MESI缓存一致性协议](./other/MESI.md)
 
-[* 并发编程基础及内存屏障](./other/concurrent.md)
+[并发编程基础及内存屏障](./other/concurrent.md)
 
-[* TCP/IP](./other/tcp_exp.md)
+[TCP/IP](./other/tcp_exp.md)
 
 [GDB及服务器负载命令使用基础](./other/gdbMan.md)
 
@@ -64,19 +64,15 @@
 
 [MapReduce基础](./Raft/MapReduce.md)
 
-[* 一致性协议](./Raft/consistency.md)
-
 [Raft Lab 2A](./Raft/Raft_lab2A.md)
 
-[* Raft Lab 2B](./Raft/Raft_lab2B.md)
+[Raft Lab 2B](./Raft/Raft_lab2B.md)
 
 [Raft Lab 2C](./Raft/Raft_lab2C.md)
 
-[* Raft Lab 3A](./Raft/Raft_lab3A.md)
+[Raft Lab 3A](./Raft/Raft_lab3A.md)
 
-[* Raft Lab 3B](./Raft/Raft_lab3B.md)
-
-[* Raft Lab 4A](./Raft/Raft_lab4A.md)
+[Raft Lab 3B](./Raft/Raft_lab3B.md)
 
 
 ## 0x04 Database
