@@ -547,6 +547,43 @@ int SegmentLogStorage::append_entries(const std::vector<LogEntry*>& entries, IOM
 
 并且在最后总是会调用一下同步，确保哪些数据已经落地到磁盘中，随后才会返回。
 
+
+### 9. SegmentLogStorage truncate_prefix
+
+SegmentLogStroage的截断是由LogManager中的截断来调用的，LogManager先通过去截断它可以控制的_logs_in_memory的数据，然后才阶段已持久化的数据。
+
+```cpp
+int SegmentLogStorage::truncate_prefix(const int64_t first_index_kept) {
+    // 如果当前所保存的LogEntry已经大于想要截断的最大index了，那么就没必要截了
+    // 造成这种原因的可能之一就是快照导致的日志压缩
+    if (_first_log_index.load(butil::memory_order_acquire) >= first_index_kept) {
+        return 0;
+    }
+    // NOTE: truncate_prefix is not important, as it has nothing to do with 
+    // consensus. We try to save meta on the disk first to make sure even if
+    // the deleting fails or the process crashes (which is unlikely to happen).
+    // The new process would see the latest `first_log_index'
+    if (save_meta(first_index_kept) != 0) { // NOTE
+        return -1;
+    }
+    // popped的保存的是需要进行截断的日志，在pop_segments中会进行判断，如果
+    // first_index_kept大于segment中的last_index，那么整个segment都会被
+    // 删除，反之不一定，也就是说可能存在first_index_kept处于segment中间，
+    // 但这个segment却不会被删除，其原因在上面的官方注释也有体现。
+    std::vector<scoped_refptr<Segment> > popped;
+    pop_segments(first_index_kept, &popped);
+    for (size_t i = 0; i < popped.size(); ++i) {
+        popped[i]->unlink();
+        popped[i] = NULL;
+    }
+    return 0;
+}
+```
+
+
+
+
+
 ## 0x01 LogManager 
 
 LogManager是一个管理全部Log的类。
@@ -568,6 +605,7 @@ void LogManager::append_entries(
         done->status().set_error(EIO, "Corrupted LogStorage");
         return run_closure_in_bthread(done);
     }
+    // 锁，保护临界区，特别是对logs会进行修改的，比如truncate_xxx的函数
     std::unique_lock<raft_mutex_t> lck(_mutex);
     // 处理冲突
     if (!entries->empty() && check_and_resolve_conflict(entries, done) != 0) {
@@ -777,5 +815,76 @@ int LogManager::check_and_resolve_conflict(
 最后，append_entries的大致流程就是：
 
 ![](./pic/append_entries_process.png)
+
+### 4. LogManager truncate_prefix
+
+truncate_prefix是删除操作，它将`[1, first_index_kept)`的logs删除掉，一般使用在日志压缩上，truncate_prefix是运行在锁中的(第二参数lck)，为了避免直接释放内存而导致的性能下降，所以才将所有logs先添加至saved_logs_in_memory中，并在解锁后才进行ref减少以释放内存。
+
+这些对`_logs_in_memory`的修改都是在`_mutex`的保护下进行的。
+
+```cpp
+int LogManager::truncate_prefix(const int64_t first_index_kept,
+                                std::unique_lock<raft_mutex_t>& lck) {
+    std::deque<LogEntry*> saved_logs_in_memory;
+    // As the duration between two snapshot (which leads to truncate_prefix at
+    // last) is likely to be a long period, _logs_in_memory is likely to
+    // contain a large amount of logs to release, which holds the mutex so that
+    // all the replicator/application are blocked.
+    // FIXME(chenzhangyi01): to resolve this issue, we have to build a data
+    // structure which is able to pop_front/pop_back N elements into another
+    // container in O(1) time, one solution is a segmented double-linked list
+    // along with a bounded queue as the indexer, of which the payoff is that
+    // _logs_in_memory has to be bounded.
+    while (!_logs_in_memory.empty()) {
+        LogEntry* entry = _logs_in_memory.front();
+        if (entry->id.index < first_index_kept) {
+            saved_logs_in_memory.push_back(entry);
+            _logs_in_memory.pop_front();
+        } else {
+            break;
+        }
+    }
+    CHECK_GE(first_index_kept, _first_log_index);
+    _first_log_index = first_index_kept;
+    if (first_index_kept > _last_log_index) {
+        // The entrie log is dropped
+        _last_log_index = first_index_kept - 1;
+    }
+    _config_manager->truncate_prefix(first_index_kept);
+    TruncatePrefixClosure* c = new TruncatePrefixClosure(first_index_kept);
+    // 将截断操作推到_disk_queue中，将由disk_thread来进行操作
+    const int rc = bthread::execution_queue_execute(_disk_queue, c);
+    lck.unlock();
+    for (size_t i = 0; i < saved_logs_in_memory.size(); ++i) {
+        saved_logs_in_memory[i]->Release();
+    }
+    return rc;
+}
+```
+
+在disk_thread里：
+
+```cpp
+TruncatePrefixClosure* tpc = 
+                        dynamic_cast<TruncatePrefixClosure*>(done);
+if (tpc) {
+    ret = log_manager->_log_storage->truncate_prefix(
+                    tpc->first_index_kept());
+    break;
+}
+```
+
+一旦检测到拿到了“截断”的指令，那么就调用SegmentLogStroage的截断操作。
+
+### 5. LogManager last_log_index & last_log_id
+
+这两个函数都直接传入了参数false，标明根本就不需要等待持久化，直接看到的是内存中的值：
+
+```cpp
+int64_t last_log_index(bool is_flush = false);
+LogId last_log_id(bool is_flush = false);
+```
+
+
 
 </font>
