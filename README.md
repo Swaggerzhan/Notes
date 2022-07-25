@@ -78,6 +78,8 @@
 
 [braft lease](./braft/braft_lease.md)
 
+[braft append entries](./braft/braft_append.md)
+
 
 ## 0x04 Database
 
