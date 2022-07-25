@@ -76,6 +76,8 @@
 
 [braft log 引擎源码分析](./braft/braft_log.md)
 
+[braft lease](./braft/braft_lease.md)
+
 
 ## 0x04 Database
 
