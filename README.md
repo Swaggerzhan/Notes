@@ -39,7 +39,7 @@
 
 [一些位运算](./other/bit.md)
 
-[cmake使用基础](./other/cmake_exp.md)
+[CMake使用笔记](./other/cmake.md)
 
 [MESI缓存一致性协议](./other/MESI.md)
 
