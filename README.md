@@ -57,6 +57,8 @@
 
 [brpc bthread笔记](./brpc/bthread.md)
 
+[brpc execution_queue笔记](./brpc/brpc_execution_queue.md)
+
 [CSAPP笔记](./other/dict.md)
 
 
