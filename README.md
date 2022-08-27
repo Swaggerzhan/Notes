@@ -123,8 +123,12 @@
 
 [Linux下ELF的静&动态链接&load](./6.S081/link.md)
 
+## 0x06 NFS
 
-## 0x06 一些项目
+[NFS Ganesha compile](./nfs/ganesha.md)
+
+
+## 0x07 一些项目
 
 [Disruptor实现的异步日志](https://github.com/Swaggerzhan/AsyncLog)
 
