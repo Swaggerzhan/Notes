@@ -129,7 +129,9 @@
 
 [NFS Ganesha compile](./nfs/ganesha.md)
 
-[NFS some struct](./nfs/ganesha.md)
+[NFS some struct](./nfs/mem.md)
+
+[NFS owner && state](./nfs/owner.md)
 
 
 ## 0x07 一些项目

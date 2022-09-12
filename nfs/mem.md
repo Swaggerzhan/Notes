@@ -1,6 +1,6 @@
 # ganesha mem layout
 
-ExchangeID的时候，会生成一个record，
+ExchangeID的时候，会生成一个record，这个record中有client_id
 
 ```cpp
 struct nfs_client_record_t {
