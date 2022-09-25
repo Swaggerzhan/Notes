@@ -104,7 +104,19 @@ set(BRPC_LIB /your_brpc_path/output/lib/libbrpc.a)
 set(BRPC_LIB /your_brpc_path/output/lib/libbrpc.so)
 ```
 
-## 0x03 ref
+
+
+## 0x03 Macos
+
+Mac上的话需要brew安装这些东西：
+
+```shell
+brew install openssl git gnu-getopt coreutils gflags protobuf leveldb
+```
+
+不过其中的protobuf我建议自己编译安装，剩下的基本和在ubuntu上安装一致。
+
+## 0x04 ref
 
 [https://github.com/apache/incubator-brpc/blob/master/docs/cn/getting_started.md](https://github.com/apache/incubator-brpc/blob/master/docs/cn/getting_started.md)
 
