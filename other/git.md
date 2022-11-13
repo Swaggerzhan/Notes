@@ -72,6 +72,14 @@ git add .
 git commit -m "merge g,h,i by one commit"
 ```
 
+如果需要前闭后闭的区间，比如：[e, i]这种，也可以加上`^`这个来表示：
+
+```shell
+git cherry-pick e^..i -n
+git add .
+git commit -m "merge e,g,h,i by one commit"
+```
+
 ## 0x01 shell中常用工具
 
 #### less
