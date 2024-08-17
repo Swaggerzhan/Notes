@@ -12,23 +12,15 @@
 
 [what is mvcc?](./database/mvcc.md)
 
-## 0x02 6.S081
+## 0x02 6.828
 
-[6.S081 lab: env setup](./6.S081/env.md)
+[assembly(AT&T syntax)](./6.828/x86_assembly.md)
 
-[6.S081 lab2: syscall](./6.S081/syscall.md)
+[env setup](./6.828/setup.md)
 
-[6.S081 note: isolation & system call](./6.S081/trap.md)
+[lab1, kernel boot](./6.828/lab1.md)
 
-[6.S081 note: interrupt](./6.S081/interrupt.md)
-
-[6.S081 note: threads switch](./6.S081/thread.md)
-
-[6.S081 note: proc exit & sleep](./6.S081/sleep_lock.md)
-
-[6.S081 note: file system](./6.S081/file_sys.md)
-
-[Linux ELF](./6.S081/link.md)
+[lab2, kernel pagetable setup](./6.828/lab2.md)
 
 ## 0x03 NFS
 
