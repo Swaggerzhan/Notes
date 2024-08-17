@@ -9,6 +9,8 @@ xv6-public是x86架构的教学操作系统，学习前先记录下一些可能�
 
 ```assembly
 .data # 定义一个data段
+.section .data # 功能同上，定义一个data段
+global val # 将val符号定义为全局，默认不指定为local
 var:
     .byte 64 # 定义一个8bit的内存空间用来保存64这个数值，地址可以使用var
     .byte 10 # 定义一个8bit的内存空间用来保存10这个数值，地址可以使用var+1
@@ -155,7 +157,7 @@ TODO
 
 ### 流程控制相关的指令
 
-流程相关的指令和EIP这个寄存器有很大关系，32bit CPU是叫EIP，64bit就是RIP，EIP/RIP不能直接修改，但是能通过其他指令间接修改。
+流程相关的指令和IP这个寄存器有很大关系，在32bit上称为EIP，64bit下称为RIP，EIP/RIP不能直接修改，但是能通过其他指令间接修改；除此之外，流程跳转还和EFLAGS寄存器息息相关。
 
 汇编中可以在代码的任意代码、数据片段插入一个label，就比如：
 
@@ -181,13 +183,13 @@ jmp begin
 #### 条件跳转
 条件跳转的语法和jmp一样，只不过名字不一样，条件也不一样，有以下几种条件：
 ```
-je <label> 
-jne <label>
-jz <label>
-jg <label>
-jge <label>
-jl <label>
-jle <label>
+je <label>  # jump equal
+jne <label> # jump not equal
+jz <label> # jump zero
+jg <label> # jump greater 第二个值大于第一个值?
+jge <label> # jump greater and equal 
+jl <label> # jump less 
+jle <label> # jump less equal
 ```
 TODO
 #### cmp
