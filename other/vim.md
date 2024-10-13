@@ -2,13 +2,55 @@
 
 ## 0x00 源
 
+ubuntu22直接可以这样安装：
 ```shell
-sudo add-apt-repository ppa:neovim-ppa/stable
 sudo apt-get install neovim
 ```
 
 ## 0x01 配置文件
 
+nvim的配置目录跟vim有一些不一样，建议是卸载一个，我这里保留了nvim，其配置地址在`$(pwd)/.config/nvim/init.vim`：
+
+```vim
+set cursorline
+set number
+call plug#begin('~/.local/share/nvim/plugged')
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+call plug#end()
+```
+其中`~/.local/share/nvim/plugged`则是这个vimplug插件下载后插件所在的地址。
+
+上面的配置文件安装了了一个coc.nvim插件，还需要在其中安装一下cocjson插件才能使用：
+
+```vim
+:CocInstall coc-json coc-tsserver
+:CocConfig
+```
+
+就可以进行配置了，例如：
+
+```vim
+{
+  "languageserver": {
+    "clangd": {
+      "command": "clangd",
+      "filetypes": ["c", "cpp"],
+      "rootPatterns": [".clangd", "compile_commands.json"],
+      "initializationOptions": {
+        "cache": {
+          "directory": "/tmp/coc-clangd"
+        },
+        "clangd": {
+          "fallbackFlags": ["-std=c++11"],
+          "resourceDirectory": "/path/to/clangd/resources"
+        }
+      }
+    }
+  }
+}
+```
+
+其中rootPatterns会在当前vim的打开路径下寻找对应的内容。
 
 #### E117错误
 

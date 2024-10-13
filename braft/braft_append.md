@@ -10,7 +10,7 @@ todo
 
 ## 0x01 request
 
-首先从NodeImpl::apply开始：
+首先从NodeImpl::apply开始，这就是用户提交raft log的入口了
 
 ```cpp
 void NodeImpl::apply(const Task& task) {
@@ -29,7 +29,7 @@ void NodeImpl::apply(const Task& task) {
 }
 ```
 
-先是生成LogEntry来存储对应的日志内容，然后将这个回调块放到apply_queue中，而这个apply_queue在NodeImpl初始化的时候定义的，它所运行的是`NodeImpl::execute_applying_tasks`：
+可以看到，这里只是简单的将任务推到对应的队列中而已，从队列的另外一头，可以看到是一个batch的实现，堆砌一段entry后在使用真正的apply将其提交：
 
 ```cpp
 	int NodeImpl::execute_applying_tasks(
@@ -57,7 +57,7 @@ void NodeImpl::apply(const Task& task) {
 }
 ```
 
-这个函数最多可以积累256个log一起提交，调用的是另外一个重载apply函数：
+就是这里：
 
 ```cpp
 void NodeImpl::apply(LogEntryAndClosure tasks[], size_t size) {
@@ -100,6 +100,10 @@ void NodeImpl::apply(LogEntryAndClosure tasks[], size_t size) {
     _log_manager->check_and_set_configuration(&_conf);
 }
 ```
+
+这里做了一些check，具体可以去看看详细的代码，其中比较重要的有：
+
+
 
 一开始是做状态的检测，如果不是Leader，就直接原地销毁这些task里的entry，并且调用done(由用户定义的，一般是本次rpc的响应)。
 

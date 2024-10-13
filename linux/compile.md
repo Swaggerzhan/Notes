@@ -2,9 +2,10 @@
 
 ## 0x00 qemu安装
 
-直接下载源码编译即可，可以选择4.0版本的，比较新的版本可能会需要python环境高于3.8
+下载源码编译即可，不过编译之前可能要先确保一下依赖有安装，可以选择4.0版本的，比较新的版本可能会需要python环境高于3.8
 
 ```bash
+sudo apt-get install libglib2.0-dev libpixman-1-dev
 wget https://download.qemu.org/qemu-4.2.0.tar.xz 
 tar xvJf qemu-4.2.0.tar.xz
 cd qemu-4.2.0
@@ -93,6 +94,7 @@ sudo make install CONFIG_PREFIX=./fs
 
 在到这个rootfs中创建一些必须的目录、拷贝一下busybox中例子的etc：
 ```bash
+cd ./fs
 sudo mkdir proc dev etc home mnt
 sudo cp -r ../examples/bootfloppy/etc/* etc/
 # cd .. && sudo chmod -R 777 fs/ 
@@ -126,11 +128,37 @@ ctrl+a, c
 
 ## 0x03 qemu 调试内核相关
 
+```bash
+ qemu-system-x86_64 -kernel ./arch/x86_64/boot/bzImage -hda ./ext2.img -append "nokaslr root=/dev/sda console=ttyS0" -nographic -s -S
+ gdb ./vmlinux
+ target remote :1234
+```
+
+tui
+```
+tui enable
+tui disable
+
+layout asm
+layout reg
+layout cmd(command)
+
+fs(focus) asm
+```
+
 ## 0x04 网络相关
 
 
+# qemu调试debian
 
 
+安装需要使用图形化：
+qemu-system-x86_64 -m 2048 -hda debian.qcow2 -cdrom ~/Downloads/debian-6.0.10-amd64-CD-1.iso -boot d -net nic -net user,hostfwd=tcp::2222-:22
+
+图形化安装的时候，不要安装GUI，然后在使用这个启动方式：
+qemu-system-x86_64 -m 2048 -hda debian.qcow2 -net nic -net user,hostfwd=tcp::2222-:22 -nographic -curses
+qemu-system-x86_64 -m 2048 -hda debian.qcow2 -net nic -net user,hostfwd=tcp::2222-:22 -nographic -display curses
+如果是Linux，就直接-curses，MacOS则需要使用-display curses
 
 ## end
 参考：

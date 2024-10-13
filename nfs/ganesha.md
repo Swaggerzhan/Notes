@@ -27,7 +27,7 @@ git clone https://github.com/nfs-ganesha/nfs-ganesha
 git checkout V2.7.6
 git submodule update --init --recursive
 
-cmake .. -DUSE_9P=OFF -DUSE_NLM=OFF
+cmake .. -DUSE_9P=OFF -DUSE_NLM=OFF -DUSE_NFSACL3=OFF -DUSE_RQUOTA=OFF -DUSE_NFS3=OFF
 make
 ```
 

@@ -64,6 +64,14 @@
     让线程ID1和线程ID2执行指定的GDB命令，如果想要所有所有线程都执行对应命令则可以使用命令:
     * thread apply all 命令
 
+
+### 3.关于tui开启
+
+可以在gdb中使用：
+```gdb
+tui disable # 关闭
+tui enable # 开启
+```
     
 # Linux一些命令调试技巧
 
