@@ -52,7 +52,15 @@ vim ./arch/x86/vdso/Makefile
 把其中的-m elf-x86_64改成-m64，-m elf_i386改成-m32即可。
 
 ##### defined(@arg)
-直接去掉中间的参数即可
+直接去掉中间的参数即可:
+```bash
+vim kernel/timeconst.pl
+```
+
+```perl
+373         #if (!defined(@val)) {
+374         if (!defined()) {
+```
 
 ##### drivers/net/igbvf/igbvf.h:129:15: error: duplicate member 'page'
 
@@ -78,6 +86,7 @@ make menuconfig
 make
 ```
 
+
 ### 制作rootfs
 
 ```bash
@@ -88,6 +97,7 @@ mkfs.ext4 rootfs.img
 ```bash
 mkdir fs
 sudo mount -t ext4 -o loop rootfs.img ./fs
+# busybox compile to this path
 sudo make install CONFIG_PREFIX=./fs
 ```
 
@@ -132,8 +142,29 @@ ctrl+a, c
 
 
 
-## end
-参考：
+## ref
 https://www.cnblogs.com/QiQi-Robotics/p/15229668.html
 https://stackoverflow.com/questions/10772319/how-to-solve-drivers-net-igbvf-igbvf-h12915-error-duplicate-member-page
 https://kerneltravel.net/blog/2021/debug_kernel_szp/
+
+
+## other
+
+compile_commands.json删除一些无用的内容
+
+```bash
+#!/bin/bash
+# Define patterns to remove (add more to the array)
+patterns=(
+    "-fconserve-stack"
+    # Add other patterns below:
+    # "-another-flag"
+    # "example-pattern"
+)
+# Process files
+for file in "$@"; do
+    # Build sed command from patterns
+    sed_cmd=$(IFS=';'; printf "/%s/d;" "${patterns[@]}")
+    sed -i "${sed_cmd%;}" "$file"
+done
+```
