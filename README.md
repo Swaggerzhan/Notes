@@ -12,6 +12,8 @@
 
 [what is mvcc?](./database/mvcc.md)
 
+[percolator](./database/percolator.md)
+
 ## 0x02 6.828
 
 [assembly(AT&T syntax)](./6.828/x86_assembly.md)
